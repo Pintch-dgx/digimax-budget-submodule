@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String?
+  passwordHash  String   // hashed password for credentials auth
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  roles         UserRole[]
+}
+
+model Role {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  users     UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum VisibilityScope {
+  FULL
+  VERTICAL
+  LIMITED
+}
+
+enum MetricTrend {
+  UP
+  DOWN
+  FLAT
+}
+
+enum BudgetRequestStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model MarketingRole {
+  id          Int              @id @default(autoincrement())
+  key         String           @unique
+  name        String
+  description String?
+  visibility  VisibilityScope  @default(VERTICAL)
+  users       MarketingUser[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model MarketingUser {
+  id             Int                    @id @default(autoincrement())
+  fullName       String
+  email          String                 @unique
+  roleId         Int
+  role           MarketingRole          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  verticals      MarketingUserVertical[]
+  ownedCampaigns Campaign[]
+  requests       BudgetRequest[]        @relation("RequesterRequests")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+}
+
+model VerticalArea {
+  id          Int                    @id @default(autoincrement())
+  slug        String                 @unique
+  name        String
+  description String?
+  users       MarketingUserVertical[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+}
+
+model MarketingUserVertical {
+  id           Int             @id @default(autoincrement())
+  userId       Int
+  verticalId   Int
+  visibility   VisibilityScope @default(VERTICAL)
+  user         MarketingUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vertical     VerticalArea    @relation(fields: [verticalId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime        @default(now())
+
+  @@unique([userId, verticalId])
+}
+
+model FiscalYear {
+  id              Int               @id @default(autoincrement())
+  code            String            @unique
+  label           String
+  totalBudget     Int
+  currency        String            @default("EUR")
+  budgetSnapshots BudgetSnapshot[]
+  allocations     BudgetAllocation[]
+  requests        BudgetRequest[]
+  insights        OperationalInsight[]
+  campaigns       Campaign[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model BudgetSnapshot {
+  id               Int         @id @default(autoincrement())
+  fiscalYearId     Int
+  label            String
+  amount           Int
+  trend            MetricTrend  @default(FLAT)
+  changePercentage Float
+  fiscalYear       FiscalYear   @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([fiscalYearId, label])
+}
+
+model MarketingChannel {
+  id          Int         @id @default(autoincrement())
+  name        String
+  slug        String      @unique
+  description String?
+  campaigns   Campaign[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Campaign {
+  id             Int                @id @default(autoincrement())
+  name           String
+  fiscalYearId   Int
+  channelId      Int
+  ownerId        Int
+  goal           String?
+  status         String             @default("active")
+  allocations    BudgetAllocation[]
+  fiscalYear     FiscalYear         @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  channel        MarketingChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  owner          MarketingUser      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model BudgetAllocation {
+  id           Int        @id @default(autoincrement())
+  campaignId   Int
+  fiscalYearId Int
+  allocated    Int
+  spent        Int         @default(0)
+  campaign     Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  fiscalYear   FiscalYear  @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([campaignId, fiscalYearId])
+}
+
+model BudgetRequest {
+  id              Int                  @id @default(autoincrement())
+  title           String
+  fiscalYearId    Int
+  requesterId     Int
+  amount          Int
+  dueDate         DateTime
+  status          BudgetRequestStatus   @default(PENDING_APPROVAL)
+  notes           String?
+  fiscalYear      FiscalYear            @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  requester       MarketingUser         @relation("RequesterRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([status, dueDate])
+}
+
+model OperationalInsight {
+  id           Int        @id @default(autoincrement())
+  fiscalYearId Int
+  title        String
+  description  String
+  priority     Int        @default(2)
+  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([priority])
+}

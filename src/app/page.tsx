@@ -1,10 +1,5 @@
 import { SummaryCard } from "@/components/SummaryCard";
-import {
-  campaignAllocations,
-  insights,
-  summaryMetrics,
-  upcomingApprovals,
-} from "@/lib/sample-data";
+import { getDashboardData } from "@/lib/dashboard-service";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("it-IT", {
@@ -14,7 +9,9 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-export default function Home() {
+export default async function Home() {
+  const { summaryMetrics, campaignAllocations, upcomingApprovals, insights } = await getDashboardData();
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       <header className="border-b border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">

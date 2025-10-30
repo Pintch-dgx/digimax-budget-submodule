@@ -1,4 +1,4 @@
-import { SummaryMetric } from "@/lib/sample-data";
+import type { SummaryMetric } from "@/lib/dashboard-service";
 
 type SummaryCardProps = {
   metric: SummaryMetric;

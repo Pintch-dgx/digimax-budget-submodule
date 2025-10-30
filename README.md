@@ -22,13 +22,46 @@ Lanciare il browser su [http://localhost:3000](http://localhost:3000) per naviga
 - sezione approvazioni in scadenza
 - insight operativi generati dai dati
 
-Tutta la UI di partenza è in `src/app/page.tsx` e i dati mock sono in `src/lib/sample-data.ts`.
+Tutta la UI di partenza è in `src/app/page.tsx` e i dati provengono dal database SQLite tramite `src/lib/dashboard-service.ts`.
 
 ### Struttura cartelle
 
 - `src/app/` — route e layout Next.js
 - `src/components/` — componenti UI riutilizzabili (es. `SummaryCard`)
 - `src/lib/` — funzioni helper e dati mock (da sostituire con API/DB)
+- `prisma/` — schema ORM e script di seed (database PostgreSQL)
+- `docs/` — documentazione architetturale (es. modello dati)
+
+### Database locale (Prisma + PostgreSQL)
+
+1) Crea `.env` (parti da un `.env.example`) e imposta `DATABASE_URL`:
+
+```bash
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/digimax_budget?schema=public"
+```
+
+2) Genera il client Prisma e applica lo schema (i modelli arrivano nella fase successiva):
+
+```bash
+npm run prisma:generate
+npm run db:push
+```
+
+3) (Opzionale) Esegui il seed quando disponibile:
+
+```bash
+npm run db:seed
+```
+
+### Ruoli fittizi (seed v0.1)
+
+| Persona            | Ruolo seed                        | Visibilità | Verticali principali                         |
+|--------------------|-----------------------------------|------------|-----------------------------------------------|
+| Elena Ferri        | Digital Experience Specialist     | Verticale  | Web design, social media, media creation, SEO |
+| Marco Neri         | Engagement & Events Specialist    | Verticale  | Email marketing, fiere, eventi, team building |
+| Chiara Bianchi     | Marketing Manager Performance     | Full       | SEO, paid ads, governa insight trasversali    |
+
+Il seed crea anche i canali marketing, campagne demo, allocazioni di budget, richieste in approvazione e insight operativi coerenti con la dashboard mock.
 
 ### Funzionalità da pianificare subito
 
