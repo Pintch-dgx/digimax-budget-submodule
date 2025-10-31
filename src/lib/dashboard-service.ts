@@ -20,7 +20,7 @@ export type UpcomingApproval = {
   title: string;
   requester: string;
   amount: number;
-  dueDate: Date;
+  dueDate: string; // ISO string for serialization
 };
 
 export type Insight = {
@@ -106,7 +106,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     title: request.title,
     requester: request.requester.fullName,
     amount: request.amount,
-    dueDate: request.dueDate,
+    dueDate: request.dueDate.toISOString(),
   }));
 
   const mappedInsights: Insight[] = insights.map((insight) => ({

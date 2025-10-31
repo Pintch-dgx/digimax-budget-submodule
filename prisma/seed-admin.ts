@@ -1,4 +1,5 @@
 import { PrismaClient, VisibilityScope } from "@prisma/client";
+import { hash } from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -23,14 +24,17 @@ async function main() {
   ]);
 
   const email = process.env.ADMIN_EMAIL ?? "admin@example.com";
+  const defaultPassword = process.env.ADMIN_PASSWORD ?? "admin123";
+  const hashedPassword = await hash(defaultPassword, 10);
 
   const user = await prisma.marketingUser.upsert({
     where: { email },
-    update: { fullName: "Admin User", roleId: admin.id },
-    create: { email, fullName: "Admin User", roleId: admin.id },
+    update: { fullName: "Admin User", roleId: admin.id, password: hashedPassword },
+    create: { email, fullName: "Admin User", roleId: admin.id, password: hashedPassword },
   });
 
   console.info(`Seeded admin user: ${user.email} with role ${admin.key}`);
+  console.info(`Default password: ${defaultPassword}`);
 }
 
 main()

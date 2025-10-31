@@ -1,5 +1,10 @@
 import { SummaryCard } from "@/components/SummaryCard";
 import { getDashboardData } from "@/lib/dashboard-service";
+import { DashboardWrapper } from "@/components/layout/DashboardWrapper";
+import { Button } from "@/components/ui";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui";
+import Link from "next/link";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("it-IT", {
@@ -10,126 +15,167 @@ function formatCurrency(value: number) {
 }
 
 export default async function Home() {
-  const { summaryMetrics, campaignAllocations, upcomingApprovals, insights } = await getDashboardData();
+  let dashboardData;
+  try {
+    dashboardData = await getDashboardData();
+  } catch (error) {
+    console.error("Error loading dashboard data:", error);
+    dashboardData = { summaryMetrics: [], campaignAllocations: [], upcomingApprovals: [], insights: [] };
+  }
+
+  const { summaryMetrics, campaignAllocations, upcomingApprovals, insights } = dashboardData;
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-50">
-      <header className="border-b border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <DashboardWrapper>
+      <div className="flex flex-col gap-8">
+        {/* Header with action button */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Marketing Budget Hub</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               Controllo end-to-end del budget marketing Digimax: visibilità, governance, insight.
             </p>
           </div>
-          <button className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400">
-            + Nuova Richiesta Budget
-          </button>
+          <Link href="/budget-requests/new">
+            <Button variant="primary" size="md" aria-label="Crea nuova richiesta budget">
+              + Nuova Richiesta Budget
+            </Button>
+          </Link>
         </div>
-      </header>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8">
-        <section>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {/* Summary Metrics */}
+        <section aria-labelledby="budget-status-heading">
+          <h2 id="budget-status-heading" className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Stato budget FY24
           </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {summaryMetrics.map((metric) => (
-              <SummaryCard key={metric.label} metric={metric} />
-            ))}
-          </div>
+          {summaryMetrics.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {summaryMetrics.map((metric) => (
+                <SummaryCard key={metric.label} metric={metric} />
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="py-6 text-center text-slate-500 dark:text-slate-400">
+                <p>Nessun dato disponibile. Esegui il seed del database per vedere i dati di esempio.</p>
+              </CardContent>
+            </Card>
+          )}
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <header className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">Allocazione campagne</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Allinea la spesa con le priorità strategiche.
-                </p>
+        {/* Main Content Grid */}
+        <section className="grid gap-6 lg:grid-cols-[2fr_1fr]" aria-label="Dashboard content">
+          {/* Campaign Allocations Table */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Allocazione campagne</CardTitle>
+                  <CardDescription>Allinea la spesa con le priorità strategiche.</CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" aria-label="Esporta allocazioni campagne">
+                  Esporta
+                </Button>
               </div>
-              <button className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                Esporta
-              </button>
-            </header>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-                <thead className="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-                  <tr>
-                    <th className="py-2 pr-4">Campagna</th>
-                    <th className="py-2 pr-4">Canale</th>
-                    <th className="py-2 pr-4">Owner</th>
-                    <th className="py-2 pr-4 text-right">Allocato</th>
-                    <th className="py-2 pr-4 text-right">Speso</th>
-                    <th className="py-2 text-right">Delta</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {campaignAllocations.map((campaign) => {
-                    const delta = campaign.allocated - campaign.spent;
-                    const deltaColor =
-                      delta > 0 ? "text-emerald-600" : delta < 0 ? "text-rose-600" : "text-slate-500";
-                    return (
-                      <tr key={campaign.name}>
-                        <td className="py-3 pr-4 font-medium">{campaign.name}</td>
-                        <td className="py-3 pr-4">{campaign.channel}</td>
-                        <td className="py-3 pr-4">{campaign.owner}</td>
-                        <td className="py-3 pr-4 text-right tabular-nums">{formatCurrency(campaign.allocated)}</td>
-                        <td className="py-3 pr-4 text-right tabular-nums">{formatCurrency(campaign.spent)}</td>
-                        <td className={`py-3 text-right tabular-nums ${deltaColor}`}>{formatCurrency(delta)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Campagna</TableHead>
+                    <TableHead>Canale</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead className="text-right">Allocato</TableHead>
+                    <TableHead className="text-right">Speso</TableHead>
+                    <TableHead className="text-right">Delta</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {campaignAllocations.length > 0 ? (
+                    campaignAllocations.map((campaign) => {
+                      const delta = campaign.allocated - campaign.spent;
+                      const deltaColor =
+                        delta > 0 ? "text-emerald-600 dark:text-emerald-400" : delta < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400";
+                      return (
+                        <TableRow key={campaign.name}>
+                          <TableCell className="font-medium">{campaign.name}</TableCell>
+                          <TableCell>{campaign.channel}</TableCell>
+                          <TableCell>{campaign.owner}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatCurrency(campaign.allocated)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatCurrency(campaign.spent)}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${deltaColor}`}>{formatCurrency(delta)}</TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-slate-500 dark:text-slate-400 py-8">
+                        Nessuna campagna disponibile
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
 
+          {/* Sidebar Cards */}
           <div className="flex flex-col gap-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <header className="mb-4">
-                <h2 className="text-lg font-semibold">Approvazioni in arrivo</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Sblocca i budget critici prima delle deadline.
-                </p>
-              </header>
-              <ul className="space-y-4 text-sm">
-                {upcomingApprovals.map((approval) => (
-                  <li key={approval.title} className="space-y-1 rounded-xl border border-slate-100 p-3 dark:border-slate-800">
-                    <p className="font-medium">{approval.title}</p>
-                    <p className="flex justify-between text-slate-500 dark:text-slate-400">
-                      <span>Richiedente: {approval.requester}</span>
-                      <span>{formatCurrency(approval.amount)}</span>
-                    </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500">
-                      Scadenza{" "}
-                      {new Date(approval.dueDate).toLocaleDateString("it-IT", { month: "short", day: "numeric" })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* Upcoming Approvals */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Approvazioni in arrivo</CardTitle>
+                <CardDescription>Sblocca i budget critici prima delle deadline.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {upcomingApprovals.length > 0 ? (
+                  <ul className="space-y-4 text-sm" role="list">
+                    {upcomingApprovals.map((approval) => (
+                      <li key={approval.title} className="space-y-1 rounded-xl border border-slate-100 p-3 dark:border-slate-800">
+                        <p className="font-medium">{approval.title}</p>
+                        <p className="flex justify-between text-slate-500 dark:text-slate-400">
+                          <span>Richiedente: {approval.requester}</span>
+                          <span>{formatCurrency(approval.amount)}</span>
+                        </p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          Scadenza{" "}
+                          <time dateTime={approval.dueDate}>
+                            {new Date(approval.dueDate).toLocaleDateString("it-IT", { month: "short", day: "numeric" })}
+                          </time>
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Nessuna approvazione in arrivo</p>
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <header className="mb-4">
-                <h2 className="text-lg font-semibold">Insight operativi</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Suggerimenti generati dai dati per ottimizzare il budget.
-                </p>
-              </header>
-              <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-                {insights.map((insight) => (
-                  <li key={insight.title}>
-                    <p className="font-semibold text-slate-900 dark:text-slate-50">{insight.title}</p>
-                    <p>{insight.description}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* Operational Insights */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Insight operativi</CardTitle>
+                <CardDescription>Suggerimenti generati dai dati per ottimizzare il budget.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {insights.length > 0 ? (
+                  <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-300" role="list">
+                    {insights.map((insight) => (
+                      <li key={insight.title}>
+                        <p className="font-semibold text-slate-900 dark:text-slate-50">{insight.title}</p>
+                        <p>{insight.description}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Nessuno insight disponibile</p>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </section>
-      </main>
-    </div>
+      </div>
+    </DashboardWrapper>
   );
 }
