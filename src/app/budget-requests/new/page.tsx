@@ -10,13 +10,78 @@ export default function NewBudgetRequestPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implementare chiamata API per creare richiesta
-    alert("Funzionalità in sviluppo. La richiesta verrà salvata nel database.");
-    router.push("/budget-requests");
+    setError(null);
+    setIsSubmitting(true);
+
+    const requestData = {
+      title,
+      amount: parseFloat(amount),
+      dueDate,
+      notes: notes || null,
+    };
+    
+    console.log("Submitting budget request:", requestData);
+
+    try {
+      const response = await fetch("/api/budget-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(requestData),
+      });
+      
+      console.log("Response status:", response.status, response.statusText);
+
+      if (!response.ok) {
+        let data: any = {};
+        const responseText = await response.text();
+        console.error("Raw response text:", responseText);
+        
+        try {
+          if (responseText) {
+            data = JSON.parse(responseText);
+          }
+        } catch (e) {
+          console.error("Failed to parse JSON:", e);
+          data = { error: `HTTP ${response.status}: ${response.statusText}`, raw: responseText };
+        }
+        
+        console.error("Error response data:", data);
+        console.error("Response status:", response.status, response.statusText);
+        
+        let errorMessage = data.error || data.details || data.raw || `HTTP ${response.status}: Failed to create budget request`;
+        
+        // Messaggi più user-friendly
+        if (response.status === 401) {
+          if (data.error?.includes("No session")) {
+            errorMessage = "Sessione non trovata. Per favore effettua di nuovo il login.";
+          } else {
+            errorMessage = "Sessione scaduta o non valida. Per favore effettua di nuovo il login.";
+          }
+        } else if (response.status === 404 && data.error?.includes("User not found")) {
+          errorMessage = "Utente non trovato nel database. Verifica di essere correttamente autenticato.";
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log("Budget request created successfully:", result);
+      router.push("/budget-requests");
+    } catch (err) {
+      console.error("Error in handleSubmit:", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -67,6 +132,20 @@ export default function NewBudgetRequestPage() {
               </div>
 
               <div>
+                <label htmlFor="dueDate" className="mb-2 block text-sm font-medium">
+                  Data Scadenza *
+                </label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  required
+                  min={new Date().toISOString().split("T")[0]}
+                />
+              </div>
+
+              <div>
                 <label htmlFor="notes" className="mb-2 block text-sm font-medium">
                   Note
                 </label>
@@ -80,11 +159,17 @@ export default function NewBudgetRequestPage() {
                 />
               </div>
 
+              {error && (
+                <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+                  {error}
+                </div>
+              )}
+
               <div className="flex gap-3 pt-4">
-                <Button type="submit" variant="primary">
-                  Crea Richiesta
+                <Button type="submit" variant="primary" disabled={isSubmitting}>
+                  {isSubmitting ? "Creazione..." : "Crea Richiesta"}
                 </Button>
-                <Button type="button" variant="ghost" onClick={() => router.back()}>
+                <Button type="button" variant="ghost" onClick={() => router.back()} disabled={isSubmitting}>
                   Annulla
                 </Button>
               </div>

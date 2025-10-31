@@ -1,5 +1,6 @@
 import { DashboardWrapper } from "@/components/layout/DashboardWrapper";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
+import { CampaignsList } from "@/components/campaigns/CampaignsList";
 
 export default function CampaignsPage() {
   return (
@@ -18,13 +19,10 @@ export default function CampaignsPage() {
             <CardDescription>Visualizza e gestisci tutte le campagne attive.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-center text-slate-500 dark:text-slate-400 py-8">
-              Funzionalità in sviluppo. Presto sarà possibile visualizzare e gestire le campagne da qui.
-            </p>
+            <CampaignsList />
           </CardContent>
         </Card>
       </div>
     </DashboardWrapper>
   );
 }
-

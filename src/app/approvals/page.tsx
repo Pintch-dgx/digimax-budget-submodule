@@ -1,5 +1,6 @@
 import { DashboardWrapper } from "@/components/layout/DashboardWrapper";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
+import { ApprovalsList } from "@/components/approvals/ApprovalsList";
 
 export default function ApprovalsPage() {
   return (
@@ -18,13 +19,10 @@ export default function ApprovalsPage() {
             <CardDescription>Richieste che necessitano della tua approvazione.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-center text-slate-500 dark:text-slate-400 py-8">
-              Funzionalità in sviluppo. Presto sarà possibile approvare o rifiutare le richieste da qui.
-            </p>
+            <ApprovalsList />
           </CardContent>
         </Card>
       </div>
     </DashboardWrapper>
   );
 }
-

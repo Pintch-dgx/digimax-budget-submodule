@@ -1,3 +1,5 @@
-import { handlers } from "@/lib/auth";
+import NextAuth from "@/lib/auth";
 
-export const { GET, POST } = handlers;
+// NextAuth v4 with App Router
+const handler = NextAuth as any;
+export { handler as GET, handler as POST };

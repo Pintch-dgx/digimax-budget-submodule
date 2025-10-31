@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getToken } from "next-auth/jwt";
 
-export default auth((req) => {
+export default async function middleware(req: any) {
   // If not authenticated, redirect to signin
-  if (!req.auth) {
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  
+  if (!token) {
     const url = new URL("/signin", req.nextUrl);
     return NextResponse.redirect(url);
   }
   return NextResponse.next();
-});
+}
 
 export const config = {
-  // Protect everything except auth endpoints, signin page, static assets and Next internals
+  // Protect everything except auth endpoints, API routes, signin page, static assets and Next internals
   matcher: [
-    "/((?!api/auth|signin|_next|favicon.ico|public|assets|.*\\.\").*)",
+    "/((?!api|signin|_next|favicon.ico|public|assets|.*\\.\").*)",
   ],
 };
 

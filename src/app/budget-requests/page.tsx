@@ -2,8 +2,9 @@ import { DashboardWrapper } from "@/components/layout/DashboardWrapper";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
 import { Button } from "@/components/ui";
 import Link from "next/link";
+import { BudgetRequestsList } from "@/components/budget-requests/BudgetRequestsList";
 
-export default function BudgetRequestsPage() {
+export default async function BudgetRequestsPage() {
   return (
     <DashboardWrapper>
       <div className="flex flex-col gap-8">
@@ -25,13 +26,10 @@ export default function BudgetRequestsPage() {
             <CardDescription>Visualizza tutte le richieste di budget.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-center text-slate-500 dark:text-slate-400 py-8">
-              Funzionalità in sviluppo. Presto sarà possibile visualizzare e gestire le richieste di budget da qui.
-            </p>
+            <BudgetRequestsList />
           </CardContent>
         </Card>
       </div>
     </DashboardWrapper>
   );
 }
-

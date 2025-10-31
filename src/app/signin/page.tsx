@@ -14,11 +14,46 @@ export default function SignInPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const res = await signIn("credentials", { redirect: false, email, password });
-    if (res?.ok) {
-      router.push("/");
-    } else {
-      setError("Credenziali non valide");
+    
+    console.log("Attempting login for:", email);
+    
+    try {
+      // In NextAuth v4, il nome del provider deve corrispondere esattamente
+      const res = await signIn("credentials", { 
+        redirect: false, 
+        email, 
+        password,
+      });
+      
+      console.log("SignIn response:", res);
+      
+      if (res?.ok) {
+        console.log("Login successful!");
+        
+        // Workaround NextAuth v5 beta: chiama l'endpoint session per forzare il cookie
+        // Fai anche una chiamata GET a una pagina protetta per triggerare la creazione del cookie
+        try {
+          await Promise.all([
+            fetch("/api/auth/session", { credentials: "include" }),
+            fetch("/", { credentials: "include", method: "GET" }),
+          ]);
+        } catch (fetchError) {
+          console.warn("Session fetch warnings:", fetchError);
+        }
+        
+        // Usa router.push invece di window.location per mantenere lo stato React
+        router.push("/");
+        router.refresh();
+      } else {
+        console.error("Login failed:", res?.error);
+        const errorMsg = res?.error === "CredentialsSignin" 
+          ? "Credenziali non valide" 
+          : res?.error || "Errore durante il login";
+        setError(errorMsg);
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Errore durante il login. Riprova.");
     }
   }
 
