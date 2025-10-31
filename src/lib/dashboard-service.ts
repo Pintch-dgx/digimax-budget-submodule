@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { BudgetRequestStatus, MetricTrend } from "@/generated/prisma/client";
+import { BudgetRequestStatus, MetricTrend } from "@prisma/client";
 
 export type SummaryMetric = {
   label: string;
