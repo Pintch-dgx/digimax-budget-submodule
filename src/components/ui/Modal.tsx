@@ -36,7 +36,7 @@ export function Modal({ isOpen, onClose, title, children, size = "md", showClose
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[100] flex min-h-screen items-center justify-center overflow-y-auto p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -45,26 +45,27 @@ export function Modal({ isOpen, onClose, title, children, size = "md", showClose
       <div className="fixed inset-0 bg-[var(--color-neutral-900)]/40 backdrop-blur-sm" aria-hidden="true" />
       <div
         className={cn(
-          "relative z-50 w-full rounded-[var(--radius-xl)] border border-[var(--color-neutral-200)] bg-[var(--surface)] p-6 shadow-[var(--shadow-lg)] backdrop-blur dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]",
+          "relative z-[101] my-8 w-full rounded-[var(--radius-xl)] border border-[var(--color-neutral-200)] bg-[var(--surface)] p-6 shadow-[var(--shadow-lg)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]",
           sizes[size]
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between border-b border-[var(--color-neutral-200)] pb-4 dark:border-[var(--color-neutral-100)]">
             <h2 id="modal-title" className="text-lg font-semibold text-[var(--color-primary)]">
               {title}
             </h2>
             {showCloseButton && (
-              <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close modal">
+              <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close modal" className="h-8 w-8 p-0">
                 ×
               </Button>
             )}
           </div>
         )}
-        {children}
+        <div>
+          {children}
+        </div>
       </div>
     </div>
   );
 }
-
