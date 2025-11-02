@@ -7,17 +7,13 @@ export default function CampaignsPage() {
     <DashboardWrapper>
       <div className="flex flex-col gap-8">
         <div>
-          <h1 className="text-2xl font-semibold">Campagne</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Gestione e monitoraggio delle campagne marketing.
+          <h1 className="text-2xl font-semibold text-[var(--color-primary)] dark:text-[var(--color-neutral-900)]">Campagne</h1>
+          <p className="text-sm text-[var(--color-neutral-500)]">
+            Monitora gli OKR, aggiorna i key result e riallinea gli investimenti.
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Lista Campagne</CardTitle>
-            <CardDescription>Visualizza e gestisci tutte le campagne attive.</CardDescription>
-          </CardHeader>
+        <Card className="border border-[var(--color-neutral-200)] bg-[var(--surface)] shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
           <CardContent>
             <CampaignsList />
           </CardContent>

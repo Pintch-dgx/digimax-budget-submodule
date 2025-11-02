@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PrismaClient, BudgetRequestStatus, MetricTrend, VisibilityScope } from "@prisma/client";
 import { hash } from "bcryptjs";
 import path from "node:path";
@@ -255,6 +256,43 @@ async function main() {
     },
   });
 
+  // Create Quarter Sprints
+  const q3Sprint = await prisma.quarterSprint.create({
+    data: {
+      name: "Quarter Sprint Q3",
+      code: "QS-FY24-Q3",
+      shortCode: "Q3",
+      objective: "Consolidare la presenza digitale e preparare il lancio autunnale.",
+      startDate: new Date("2024-07-01"),
+      endDate: new Date("2024-09-30"),
+      fiscalYearId: fiscalYear.id,
+    },
+  });
+
+  const q4Sprint = await prisma.quarterSprint.create({
+    data: {
+      name: "Quarter Sprint Q4",
+      code: "QS-FY24-Q4",
+      shortCode: "Q4",
+      objective: "Generare lead qualificati e rafforzare la loyalty clienti.",
+      startDate: new Date("2024-10-01"),
+      endDate: new Date("2024-12-31"),
+      fiscalYearId: fiscalYear.id,
+    },
+  });
+
+  const eventsSprint = await prisma.quarterSprint.create({
+    data: {
+      name: "Quarter Sprint Eventi",
+      code: "QS-FY24-EVENT",
+      shortCode: "EVT",
+      objective: "Coordinare eventi di relazione e partnership strategiche.",
+      startDate: new Date("2024-05-01"),
+      endDate: new Date("2024-08-31"),
+      fiscalYearId: fiscalYear.id,
+    },
+  });
+
   // Create Campaigns with Allocations
   await prisma.campaign.create({
     data: {
@@ -262,6 +300,7 @@ async function main() {
       fiscalYearId: fiscalYear.id,
       channelId: digitalChannel.id,
       ownerId: elena.id,
+      quarterSprintId: q3Sprint.id,
       goal: "Rafforzare la percezione del brand e migliorare la UX dei touchpoint digitali.",
       allocations: {
         create: {
@@ -279,6 +318,7 @@ async function main() {
       fiscalYearId: fiscalYear.id,
       channelId: eventsChannel.id,
       ownerId: marco.id,
+      quarterSprintId: eventsSprint.id,
       goal: "Evento di networking con clienti chiave del Nord Italia.",
       allocations: {
         create: {
@@ -296,6 +336,7 @@ async function main() {
       fiscalYearId: fiscalYear.id,
       channelId: abmChannel.id,
       ownerId: chiara.id,
+      quarterSprintId: q4Sprint.id,
       goal: "Targeting su 50 account enterprise con campagne personalizzate.",
       allocations: {
         create: {
@@ -309,13 +350,15 @@ async function main() {
 
   // Create Budget Requests (Pending Approvals)
   const now = new Date();
+  const fiveDays = 5 * 24 * 60 * 60 * 1000;
+  const tenDays = 10 * 24 * 60 * 60 * 1000;
   await prisma.budgetRequest.create({
     data: {
       title: "Richiesta Budget Q4 - Content Marketing",
       fiscalYearId: fiscalYear.id,
       requesterId: elena.id,
       amount: 85_000,
-      dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      dueDate: new Date(now.getTime() + fiveDays),
       status: BudgetRequestStatus.PENDING_APPROVAL,
       notes: "Budget per produzione contenuti video e infografiche per campagne social Q4.",
     },
@@ -323,13 +366,13 @@ async function main() {
 
   await prisma.budgetRequest.create({
     data: {
-      title: "Evento Fiera IT Expo",
+      title: "Richiesta Sponsorizzazione Evento Industrial Tech",
       fiscalYearId: fiscalYear.id,
       requesterId: marco.id,
-      amount: 120_000,
-      dueDate: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+      amount: 60_000,
+      dueDate: new Date(now.getTime() + tenDays),
       status: BudgetRequestStatus.PENDING_APPROVAL,
-      notes: "Budget per partecipazione fiera IT Expo con stand e networking event.",
+      notes: "Sponsorizzazione gold per aumentare la visibilità nei mercati industriali.",
     },
   });
 

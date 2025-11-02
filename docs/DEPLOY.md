@@ -1,4 +1,4 @@
-# Guida Deploy - Marketing Budget Hub
+# Guida Deploy - Digimax Budget Hub
 
 ## Prerequisiti
 

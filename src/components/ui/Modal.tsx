@@ -42,17 +42,17 @@ export function Modal({ isOpen, onClose, title, children, size = "md", showClose
       aria-modal="true"
       aria-labelledby={title ? "modal-title" : undefined}
     >
-      <div className="fixed inset-0 bg-black/50" aria-hidden="true" />
+      <div className="fixed inset-0 bg-[var(--color-neutral-900)]/40 backdrop-blur-sm" aria-hidden="true" />
       <div
         className={cn(
-          "relative z-50 w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-lg dark:border-slate-800 dark:bg-slate-900",
+          "relative z-50 w-full rounded-[var(--radius-xl)] border border-[var(--color-neutral-200)] bg-[var(--surface)] p-6 shadow-[var(--shadow-lg)] backdrop-blur dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]",
           sizes[size]
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="mb-4 flex items-center justify-between">
-            <h2 id="modal-title" className="text-lg font-semibold">
+            <h2 id="modal-title" className="text-lg font-semibold text-[var(--color-primary)]">
               {title}
             </h2>
             {showCloseButton && (

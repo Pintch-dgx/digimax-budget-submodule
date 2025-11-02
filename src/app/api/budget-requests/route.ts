@@ -1,97 +1,153 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/get-session";
 import { prisma } from "@/lib/db";
-import { BudgetRequestStatus } from "@prisma/client";
+import { BudgetRequestLinkStatus, BudgetRequestStatus, Prisma } from "@prisma/client";
 
 // GET /api/budget-requests - Lista tutte le richieste budget
 export async function GET(request: NextRequest) {
   try {
     console.log("GET /api/budget-requests - Starting");
-    console.log("DATABASE_URL:", process.env.DATABASE_URL);
-    
-    // Log cookies for debugging
-    const cookies = request.cookies.getAll();
-    console.log("Cookies received:", cookies.length, "cookies");
-    const authCookie = cookies.find(c => c.name.startsWith("authjs.session-token") || c.name.startsWith("__Secure-authjs.session-token") || c.name.includes("session"));
-    console.log("Auth cookie found:", authCookie ? `${authCookie.name} (${authCookie.value.length} chars)` : "No auth cookie");
-    
-    // Log headers
-    const authHeader = request.headers.get("authorization");
-    const cookieHeader = request.headers.get("cookie");
-    console.log("Authorization header:", authHeader ? "Present" : "Missing");
-    console.log("Cookie header:", cookieHeader ? `${cookieHeader.length} chars` : "Missing");
-    
-    let session;
-    try {
-      session = await getSession();
-      console.log("Session retrieved:", session ? "Yes" : "No");
-      if (session) {
-        console.log("Session user:", session.user ? session.user.email : "No user");
-        console.log("Session user ID:", session.user?.id || "No ID");
-      } else {
-        console.log("⚠️ No session found - user is not authenticated");
-        console.log("This could mean:");
-        console.log("  - Cookie is missing or invalid");
-        console.log("  - Session expired");
-        console.log("  - User never logged in");
-      }
-    } catch (authError) {
-      console.error("❌ Auth error:", authError);
-      console.error("Auth error name:", authError instanceof Error ? authError.name : typeof authError);
-      console.error("Auth error constructor:", authError instanceof Error ? authError.constructor.name : "N/A");
-      console.error("Auth error stack:", authError instanceof Error ? authError.stack : "N/A");
-      return NextResponse.json({ error: "Authentication failed", details: String(authError) }, { status: 401 });
-    }
-    
-    if (!session) {
-      console.log("No session found");
+
+    const session = await getSession();
+
+    if (!session || !session.user || !session.user.id) {
+      console.log("GET /api/budget-requests - Unauthorized");
       return NextResponse.json({ error: "Unauthorized - No session" }, { status: 401 });
     }
-    
-    if (!session.user || !session.user.id) {
-      console.log("Session exists but no user or user ID");
-      return NextResponse.json({ error: "Unauthorized - No user ID" }, { status: 401 });
-    }
-    
-    console.log("Querying database...");
 
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get("status");
     const fiscalYearId = searchParams.get("fiscalYearId");
+    const requesterId = searchParams.get("requesterId");
+    const search = searchParams.get("search");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
-    const where: any = {};
-    if (status) {
+    const pageParam = parseInt(searchParams.get("page") || "1", 10);
+    const pageSizeParam = parseInt(searchParams.get("pageSize") || "10", 10);
+    const page = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+    const pageSize = Number.isNaN(pageSizeParam)
+      ? 10
+      : Math.min(Math.max(pageSizeParam, 5), 50);
+
+    const where: Prisma.BudgetRequestWhereInput = {};
+
+    if (status && status !== "all") {
       where.status = status as BudgetRequestStatus;
     }
+
     if (fiscalYearId) {
-      where.fiscalYearId = parseInt(fiscalYearId);
+      const fiscalYear = parseInt(fiscalYearId, 10);
+      if (!Number.isNaN(fiscalYear)) {
+        where.fiscalYearId = fiscalYear;
+      }
     }
 
-    const requests = await prisma.budgetRequest.findMany({
-      where,
-      include: {
-        requester: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
+    if (requesterId) {
+      const requester = parseInt(requesterId, 10);
+      if (!Number.isNaN(requester)) {
+        where.requesterId = requester;
+      }
+    }
+
+    if (search) {
+      const searchConditions: Prisma.BudgetRequestWhereInput[] = [
+        { title: { contains: search, mode: "insensitive" } },
+        { notes: { contains: search, mode: "insensitive" } },
+        { requester: { fullName: { contains: search, mode: "insensitive" } } },
+        { requester: { email: { contains: search, mode: "insensitive" } } },
+        { fiscalYear: { code: { contains: search, mode: "insensitive" } } },
+      ];
+      where.OR = searchConditions;
+    }
+
+    const dueDateFilter: Prisma.DateTimeFilter = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!Number.isNaN(start.getTime())) {
+        dueDateFilter.gte = start;
+      }
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!Number.isNaN(end.getTime())) {
+        // Imposta fine giornata per includere l'intero giorno di fine intervallo
+        end.setHours(23, 59, 59, 999);
+        dueDateFilter.lte = end;
+      }
+    }
+    if (Object.keys(dueDateFilter).length > 0) {
+      where.dueDate = dueDateFilter;
+    }
+
+    const skip = (page - 1) * pageSize;
+
+    const currentUserId = Number.parseInt(String(session.user.id), 10);
+    const currentUser = Number.isNaN(currentUserId)
+      ? null
+      : await prisma.marketingUser.findUnique({
+          where: { id: currentUserId },
+          include: { role: true },
+        });
+
+    const canDelete = (currentUser?.role?.key ?? "").toLowerCase() === "admin";
+
+    const [total, requests] = await Promise.all([
+      prisma.budgetRequest.count({ where }),
+      prisma.budgetRequest.findMany({
+        where,
+        include: {
+          requester: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+          fiscalYear: {
+            select: {
+              id: true,
+              code: true,
+              label: true,
+            },
+          },
+          campaign: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        fiscalYear: {
-          select: {
-            id: true,
-            code: true,
-            label: true,
-          },
+        orderBy: {
+          createdAt: "desc",
         },
-      },
-      orderBy: {
-        createdAt: "desc",
+        skip,
+        take: pageSize,
+      }),
+    ]);
+
+    const totalPages = Math.max(Math.ceil(total / pageSize), 1);
+
+    console.log(
+      "GET /api/budget-requests - Success",
+      JSON.stringify({
+        filters: { status, fiscalYearId, requesterId, search, startDate, endDate },
+        pagination: { page, pageSize, total, totalPages },
+        canDelete,
+      })
+    );
+
+    return NextResponse.json({
+      data: requests,
+      meta: {
+        total,
+        page,
+        pageSize,
+        totalPages,
+        canDelete,
       },
     });
-
-    console.log("Database query successful, found", requests.length, "requests");
-    return NextResponse.json(requests);
   } catch (error) {
     console.error("Error fetching budget requests:");
     console.error("Error name:", error instanceof Error ? error.name : typeof error);
@@ -188,7 +244,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log("Request body:", { ...body, notes: body.notes ? "present" : "null" });
     
-    const { title, amount, dueDate, notes, fiscalYearId } = body;
+    const { title, amount, dueDate, notes, fiscalYearId, quarterSprintId, keyResultId, campaignId } = body;
 
     // Validazione
     if (!title || !amount || !dueDate) {
@@ -320,40 +376,199 @@ export async function POST(request: NextRequest) {
     
     console.log(`✅ Requester verified: ${requesterExists.fullName} (${requesterExists.email}, ID: ${requesterExists.id})`);
 
+    let resolvedQuarterSprintId: number | null = null;
+    if (quarterSprintId !== undefined && quarterSprintId !== null && quarterSprintId !== "") {
+      const parsedQuarterId = Number(quarterSprintId);
+      if (!Number.isFinite(parsedQuarterId)) {
+        return NextResponse.json({ error: "Quarter sprint non valido" }, { status: 400 });
+      }
+
+      const quarterSprint = await (prisma as any).quarterSprint.findUnique({
+        where: { id: parsedQuarterId },
+        select: { id: true, fiscalYearId: true },
+      });
+
+      if (!quarterSprint) {
+        return NextResponse.json({ error: "Quarter sprint non trovato" }, { status: 404 });
+      }
+
+      resolvedQuarterSprintId = quarterSprint.id;
+      if (!fyId && quarterSprint.fiscalYearId) {
+        fyId = quarterSprint.fiscalYearId;
+      }
+    }
+
+    let resolvedKeyResultId: number | null = null;
+    if (keyResultId !== undefined && keyResultId !== null && keyResultId !== "") {
+      const parsedKeyResultId = Number(keyResultId);
+      if (!Number.isFinite(parsedKeyResultId)) {
+        return NextResponse.json({ error: "Key Result non valido" }, { status: 400 });
+      }
+
+      const keyResult = await (prisma as any).keyResult.findUnique({
+        where: { id: parsedKeyResultId },
+        select: { id: true, quarterSprintId: true },
+      });
+
+      if (!keyResult) {
+        return NextResponse.json({ error: "Key Result non trovato" }, { status: 404 });
+      }
+
+      resolvedKeyResultId = keyResult.id;
+
+      if (keyResult.quarterSprintId) {
+        if (resolvedQuarterSprintId && resolvedQuarterSprintId !== keyResult.quarterSprintId) {
+          return NextResponse.json(
+            { error: "Il Key Result selezionato appartiene a un Quarter Sprint diverso" },
+            { status: 400 }
+          );
+        }
+        resolvedQuarterSprintId = keyResult.quarterSprintId;
+      }
+    }
+
+    let resolvedCampaignId: number | null = null;
+    if (campaignId !== undefined && campaignId !== null && campaignId !== "") {
+      const parsedCampaignId = Number(campaignId);
+      if (!Number.isFinite(parsedCampaignId)) {
+        return NextResponse.json({ error: "Campagna non valida" }, { status: 400 });
+      }
+
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: parsedCampaignId },
+        select: {
+          id: true,
+          fiscalYearId: true,
+          quarterSprintId: true,
+          keyResultId: true,
+        },
+      });
+
+      if (!campaign) {
+        return NextResponse.json({ error: "Campagna non trovata" }, { status: 404 });
+      }
+
+      if (campaign.fiscalYearId !== fyId) {
+        return NextResponse.json(
+          { error: "La campagna selezionata appartiene a un anno fiscale diverso" },
+          { status: 400 }
+        );
+      }
+
+      if (campaign.quarterSprintId) {
+        if (resolvedQuarterSprintId && resolvedQuarterSprintId !== campaign.quarterSprintId) {
+          return NextResponse.json(
+            { error: "La campagna selezionata appartiene a un Quarter Sprint diverso" },
+            { status: 400 }
+          );
+        }
+        resolvedQuarterSprintId = campaign.quarterSprintId;
+      }
+
+      if (campaign.keyResultId) {
+        if (resolvedKeyResultId && resolvedKeyResultId !== campaign.keyResultId) {
+          return NextResponse.json(
+            { error: "La campagna selezionata è legata a un Key Result diverso" },
+            { status: 400 }
+          );
+        }
+        resolvedKeyResultId = campaign.keyResultId;
+      }
+
+      resolvedCampaignId = campaign.id;
+    }
+
+    const linkStatus = resolvedCampaignId
+      ? BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN
+      : resolvedKeyResultId
+        ? BudgetRequestLinkStatus.ASSIGNMENT_PENDING
+        : BudgetRequestLinkStatus.UNDEFINED_OBJECTIVE;
+
     console.log("Creating budget request with data:", {
       title,
       amount: amountNum,
       dueDate: new Date(dueDate),
       fiscalYearId: fyId,
       requesterId,
+      quarterSprintId: resolvedQuarterSprintId,
+      keyResultId: resolvedKeyResultId,
+      campaignId: resolvedCampaignId,
+      linkStatus,
     });
 
+    const createData = {
+      title,
+      amount: Math.round(amountNum),
+      dueDate: new Date(dueDate),
+      notes: notes || null,
+      fiscalYear: { connect: { id: fyId } },
+      requester: { connect: { id: requesterId } },
+      status: BudgetRequestStatus.PENDING_APPROVAL,
+      linkStatus,
+      ...(resolvedQuarterSprintId
+        ? {
+            quarterSprint: {
+              connect: { id: resolvedQuarterSprintId },
+            },
+          }
+        : {}),
+      ...(resolvedKeyResultId
+        ? {
+            keyResult: {
+              connect: { id: resolvedKeyResultId },
+            },
+          }
+        : {}),
+      ...(resolvedCampaignId
+        ? {
+            campaign: {
+              connect: { id: resolvedCampaignId },
+            },
+          }
+        : {}),
+    } satisfies Prisma.BudgetRequestCreateInput;
+
+    const includeRelations = {
+      requester: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        },
+      },
+      fiscalYear: {
+        select: {
+          id: true,
+          code: true,
+          label: true,
+        },
+      },
+      quarterSprint: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          shortCode: true,
+        },
+      },
+      keyResult: {
+        select: {
+          id: true,
+          title: true,
+          metric: true,
+        },
+      },
+      campaign: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    } as const;
+
     const budgetRequest = await prisma.budgetRequest.create({
-      data: {
-        title,
-        amount: Math.round(amountNum), // Arrotonda a intero
-        dueDate: new Date(dueDate),
-        notes: notes || null,
-        fiscalYearId: fyId,
-        requesterId: requesterId,
-        status: BudgetRequestStatus.PENDING_APPROVAL,
-      },
-      include: {
-        requester: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
-        fiscalYear: {
-          select: {
-            id: true,
-            code: true,
-            label: true,
-          },
-        },
-      },
+      data: createData,
+      include: includeRelations,
     });
 
     console.log("Budget request created successfully:", budgetRequest.id);
@@ -398,4 +613,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

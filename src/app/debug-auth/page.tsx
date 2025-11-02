@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 
 export default function DebugAuthPage() {
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
   const testGET = async () => {
@@ -134,7 +134,7 @@ export default function DebugAuthPage() {
             <CardTitle>Risultato: {result.method}</CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="bg-slate-100 dark:bg-slate-800 p-4 rounded text-xs overflow-auto">
+            <pre className="rounded-[var(--radius-md)] bg-[var(--color-tertiary-ice)] p-4 text-xs text-[var(--color-primary)] overflow-auto">
               {JSON.stringify(result, null, 2)}
             </pre>
           </CardContent>
@@ -146,10 +146,10 @@ export default function DebugAuthPage() {
           <CardTitle>Istruzioni</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>1. Clicca su "Test Check User (Elena)" per verificare se l'utente esiste e la password è corretta</p>
-          <p>2. Clicca su "Test GET" per verificare se la sessione funziona</p>
-          <p>3. Clicca su "Test POST" per verificare se POST funziona</p>
-          <p>4. Clicca su "Test Crea Richiesta" per simulare la creazione di una richiesta</p>
+          <p>1. Clicca su Test Check User (Elena) per verificare se l&apos;utente esiste e la password è corretta</p>
+          <p>2. Clicca su Test GET per verificare se la sessione funziona</p>
+          <p>3. Clicca su Test POST per verificare se POST funziona</p>
+          <p>4. Clicca su Test Crea Richiesta per simulare la creazione di una richiesta</p>
           <p className="text-rose-600 dark:text-rose-400 mt-4">
             <strong>Importante:</strong> Verifica anche la console del browser (F12) e i log del server nel terminale.
           </p>

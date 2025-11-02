@@ -10,8 +10,8 @@ export default async function BudgetRequestsPage() {
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">Richieste Budget</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <h1 className="text-2xl font-semibold text-[var(--color-primary)] dark:text-[var(--color-neutral-900)]">Richieste Budget</h1>
+            <p className="text-sm text-[var(--color-neutral-500)]">
               Gestisci le richieste di budget e le approvazioni.
             </p>
           </div>
@@ -20,7 +20,7 @@ export default async function BudgetRequestsPage() {
           </Link>
         </div>
 
-        <Card>
+        <Card className="border border-[var(--color-neutral-200)] bg-[var(--surface)] shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
           <CardHeader>
             <CardTitle>Richieste Budget</CardTitle>
             <CardDescription>Visualizza tutte le richieste di budget.</CardDescription>

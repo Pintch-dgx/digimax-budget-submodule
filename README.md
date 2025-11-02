@@ -1,6 +1,6 @@
-# Digimax Marketing Budget Hub
+# Digimax Budget Hub
 
-Applicazione Next.js (App Router + TypeScript + Tailwind CSS) pensata per creare una single source of truth del budget marketing Digimax. L'obiettivo è validare velocemente la UX su Mac e predisporre l'evoluzione su infrastruttura Microsoft/Azure o Power Platform.
+Applicazione Next.js (App Router + TypeScript + Tailwind CSS) pensata per creare una single source of truth del budget Digimax. L'obiettivo è validare velocemente la UX su Mac e predisporre l'evoluzione su infrastruttura Microsoft/Azure o Power Platform.
 
 ## Requisiti
 

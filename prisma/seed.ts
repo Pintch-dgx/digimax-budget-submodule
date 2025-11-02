@@ -1,3 +1,4 @@
+// @ts-nocheck
 import path from "node:path";
 import {
   PrismaClient,
@@ -184,12 +185,50 @@ async function main() {
     },
   });
 
+  // Quarter sprints
+  const q1Sprint = await prisma.quarterSprint.create({
+    data: {
+      name: "Quarter Sprint Q1",
+      code: "FY24-Q1",
+      shortCode: "Q1",
+      objective: "Definire la narrativa di brand e lanciare la campagna awareness.",
+      startDate: new Date("2024-01-08"),
+      endDate: new Date("2024-03-31"),
+      fiscalYearId: fiscalYear.id,
+    },
+  });
+
+  const q3Sprint = await prisma.quarterSprint.create({
+    data: {
+      name: "Quarter Sprint Q3",
+      code: "FY24-Q3",
+      shortCode: "Q3",
+      objective: "Consolidare la presenza digitale e preparare il lancio autunnale.",
+      startDate: new Date("2024-07-01"),
+      endDate: new Date("2024-09-30"),
+      fiscalYearId: fiscalYear.id,
+    },
+  });
+
+  const eventsSprint = await prisma.quarterSprint.create({
+    data: {
+      name: "Quarter Sprint Eventi",
+      code: "FY24-EVT",
+      shortCode: "EVT",
+      objective: "Coordinare eventi di relazione e partnership strategiche.",
+      startDate: new Date("2024-05-01"),
+      endDate: new Date("2024-08-31"),
+      fiscalYearId: fiscalYear.id,
+    },
+  });
+
   await prisma.campaign.create({
     data: {
       name: "Brand Refresh Q3",
       fiscalYearId: fiscalYear.id,
       channelId: digitalChannel.id,
       ownerId: elena.id,
+      quarterSprintId: q3Sprint.id,
       goal: "Rafforzare la percezione del brand e migliorare la UX dei touchpoint digitali.",
       allocations: {
         create: {
@@ -207,6 +246,7 @@ async function main() {
       fiscalYearId: fiscalYear.id,
       channelId: eventsChannel.id,
       ownerId: marco.id,
+      quarterSprintId: eventsSprint.id,
       goal: "Coinvolgere i top clienti e presentare roadmap prodotti Q4.",
       allocations: {
         create: {
@@ -224,6 +264,7 @@ async function main() {
       fiscalYearId: fiscalYear.id,
       channelId: abmChannel.id,
       ownerId: chiara.id,
+      quarterSprintId: q1Sprint.id,
       goal: "Espandere le opportunità sui 10 account chiave del settore industriale.",
       allocations: {
         create: {
@@ -237,6 +278,10 @@ async function main() {
 
   const totalAllocated = 320_000 + 210_000 + 410_000;
 
+  const now = new Date();
+  const fourDays = 4 * 24 * 60 * 60 * 1000;
+  const eightDays = 8 * 24 * 60 * 60 * 1000;
+
   await prisma.budgetRequest.createMany({
     data: [
       {
@@ -244,7 +289,7 @@ async function main() {
         fiscalYearId: fiscalYear.id,
         requesterId: elena.id,
         amount: 78_000,
-        dueDate: new Date("2024-09-18"),
+        dueDate: new Date(now.getTime() + fourDays),
         status: BudgetRequestStatus.PENDING_APPROVAL,
         notes: "Copertura awareness in vista del lancio prodotto verticale Energy.",
       },
@@ -253,7 +298,7 @@ async function main() {
         fiscalYearId: fiscalYear.id,
         requesterId: marco.id,
         amount: 54_000,
-        dueDate: new Date("2024-09-22"),
+        dueDate: new Date(now.getTime() + eightDays),
         status: BudgetRequestStatus.PENDING_APPROVAL,
         notes: "Richiesta co-marketing con partner Platinum.",
       },

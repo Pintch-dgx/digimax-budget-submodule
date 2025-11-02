@@ -58,15 +58,19 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 dark:bg-slate-950">
-      <Card className="w-full max-w-sm">
+    <div className="relative flex min-h-screen items-center justify-center bg-[var(--background)] p-6">
+      <div
+        className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(161,182,214,0.25),_transparent_60%)]"
+        aria-hidden="true"
+      />
+      <Card className="relative z-10 w-full max-w-sm shadow-[var(--shadow-lg)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
         <CardHeader>
-          <CardTitle>Accedi</CardTitle>
+          <CardTitle className="text-2xl">Accedi</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="mb-2 block text-sm font-medium">
+              <label htmlFor="email" className="mb-2 block text-sm font-semibold text-[var(--color-neutral-600)]">
                 Email
               </label>
               <Input
@@ -79,7 +83,7 @@ export default function SignInPage() {
               />
             </div>
             <div>
-              <label htmlFor="password" className="mb-2 block text-sm font-medium">
+              <label htmlFor="password" className="mb-2 block text-sm font-semibold text-[var(--color-neutral-600)]">
                 Password
               </label>
               <Input

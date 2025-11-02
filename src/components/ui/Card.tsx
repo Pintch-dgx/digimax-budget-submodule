@@ -9,7 +9,7 @@ export function Card({ className, children, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900",
+        "rounded-[var(--radius-lg)] border border-[var(--color-neutral-200)] bg-[var(--surface)] p-6 shadow-[var(--shadow-md)] backdrop-blur dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]",
         className
       )}
       {...props}
@@ -21,7 +21,7 @@ export function Card({ className, children, ...props }: CardProps) {
 
 export function CardHeader({ className, children, ...props }: CardProps) {
   return (
-    <div className={cn("mb-4", className)} {...props}>
+    <div className={cn("mb-4 flex flex-col gap-1", className)} {...props}>
       {children}
     </div>
   );
@@ -29,7 +29,13 @@ export function CardHeader({ className, children, ...props }: CardProps) {
 
 export function CardTitle({ className, children, ...props }: CardProps) {
   return (
-    <h3 className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", className)} {...props}>
+    <h3
+      className={cn(
+        "text-lg font-semibold text-[var(--color-primary)] dark:text-[var(--color-neutral-900)]",
+        className
+      )}
+      {...props}
+    >
       {children}
     </h3>
   );
@@ -37,7 +43,7 @@ export function CardTitle({ className, children, ...props }: CardProps) {
 
 export function CardDescription({ className, children, ...props }: CardProps) {
   return (
-    <p className={cn("text-sm text-slate-500 dark:text-slate-400", className)} {...props}>
+    <p className={cn("text-sm text-[var(--color-neutral-500)]", className)} {...props}>
       {children}
     </p>
   );

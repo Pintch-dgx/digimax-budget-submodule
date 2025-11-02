@@ -5,9 +5,9 @@ type SummaryCardProps = {
 };
 
 const trendColors = {
-  up: "text-emerald-600",
-  down: "text-rose-600",
-  flat: "text-slate-500",
+  up: "text-[#1f7b5c]",
+  down: "text-[#b93c35]",
+  flat: "text-[var(--color-neutral-500)]",
 } as const;
 
 export function SummaryCard({ metric }: SummaryCardProps) {
@@ -20,12 +20,12 @@ export function SummaryCard({ metric }: SummaryCardProps) {
   const formattedChange = `${metric.changePercentage > 0 ? "+" : ""}${metric.changePercentage.toFixed(1)}%`;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
-      <header className="mb-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+    <article className="rounded-[var(--radius-lg)] border border-[var(--color-neutral-200)] bg-[var(--surface)] p-5 shadow-[var(--shadow-md)] transition hover:shadow-[var(--shadow-lg)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
+      <header className="mb-2 text-sm font-medium uppercase tracking-wide text-[var(--color-neutral-500)]">
         {metric.label}
       </header>
-      <p className="text-2xl font-semibold text-slate-900 dark:text-slate-50">{formattedAmount}</p>
-      <p className={`mt-1 text-sm font-medium ${trendColors[metric.trend]}`}>{formattedChange} vs target</p>
+      <p className="text-2xl font-semibold text-[var(--color-primary)] dark:text-[var(--color-neutral-800)]">{formattedAmount}</p>
+      <p className={`mt-1 text-sm font-semibold ${trendColors[metric.trend]}`}>{formattedChange} vs target</p>
     </article>
   );
 }

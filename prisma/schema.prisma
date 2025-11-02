@@ -7,6 +7,251 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model MarketingRole {
+  id          Int             @id @default(autoincrement())
+  key         String          @unique
+  name        String
+  description String?
+  visibility  VisibilityScope @default(VERTICAL)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  users       MarketingUser[]
+}
+
+model MarketingUser {
+  id              Int                     @id @default(autoincrement())
+  fullName        String
+  email           String                  @unique
+  password        String
+  roleId          Int
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  requests        BudgetRequest[]         @relation("RequesterRequests")
+  ownedCampaigns  Campaign[]
+  ownedKeyResults KeyResult[]             @relation("KeyResultOwner")
+  role            MarketingRole           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  verticals       MarketingUserVertical[]
+  ownedObjectives Objective[]             @relation("ObjectiveOwner")
+}
+
+model VerticalArea {
+  id          Int                     @id @default(autoincrement())
+  slug        String                  @unique
+  name        String
+  description String?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  users       MarketingUserVertical[]
+}
+
+model MarketingUserVertical {
+  id         Int             @id @default(autoincrement())
+  userId     Int
+  verticalId Int
+  visibility VisibilityScope @default(VERTICAL)
+  assignedAt DateTime        @default(now())
+  vertical   VerticalArea    @relation(fields: [verticalId], references: [id], onDelete: Cascade)
+  user       MarketingUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, verticalId])
+}
+
+model FiscalYear {
+  id              Int                  @id @default(autoincrement())
+  code            String               @unique
+  label           String
+  totalBudget     Int
+  currency        String               @default("EUR")
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  allocations     BudgetAllocation[]
+  requests        BudgetRequest[]
+  budgetSnapshots BudgetSnapshot[]
+  campaigns       Campaign[]
+  objectives      Objective[]
+  insights        OperationalInsight[]
+  quarterSprints  QuarterSprint[]
+}
+
+model BudgetSnapshot {
+  id               Int         @id @default(autoincrement())
+  fiscalYearId     Int
+  label            String
+  amount           Int
+  trend            MetricTrend @default(FLAT)
+  changePercentage Float
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  fiscalYear       FiscalYear  @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+
+  @@unique([fiscalYearId, label])
+}
+
+model MarketingChannel {
+  id          Int        @id @default(autoincrement())
+  name        String
+  slug        String     @unique
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  campaigns   Campaign[]
+}
+
+model Objective {
+  id             Int             @id @default(autoincrement())
+  title          String
+  description    String?
+  fiscalYearId   Int
+  ownerId        Int?
+  status         ObjectiveStatus @default(ACTIVE)
+  progress       Float?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  owner          MarketingUser?  @relation("ObjectiveOwner", fields: [ownerId], references: [id])
+  fiscalYear     FiscalYear      @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  quarterSprints QuarterSprint[]
+
+  @@index([fiscalYearId])
+  @@index([ownerId])
+}
+
+model QuarterSprint {
+  id               Int                @id @default(autoincrement())
+  name             String
+  code             String?            @unique
+  shortCode        String?
+  quarter          Int
+  startDate        DateTime
+  endDate          DateTime
+  fiscalYearId     Int
+  objectiveId      Int
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  objectiveSummary String?
+  allocations      BudgetAllocation[]
+  budgetRequests   BudgetRequest[]
+  campaigns        Campaign[]
+  keyResults       KeyResult[]
+  objective        Objective          @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  fiscalYear       FiscalYear         @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+
+  @@index([fiscalYearId])
+  @@index([objectiveId])
+  @@index([fiscalYearId, quarter])
+}
+
+model KeyResult {
+  id              Int                  @id @default(autoincrement())
+  title           String
+  metric          String
+  targetValue     Float
+  progressValue   Float?               @default(0)
+  unit            String               @default("unit")
+  weight          Int                  @default(100)
+  status          KeyResultStatus      @default(NOT_STARTED)
+  quarterSprintId Int
+  ownerId         Int?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  budgetRequests  BudgetRequest[]
+  campaigns       Campaign[]
+  owner           MarketingUser?       @relation("KeyResultOwner", fields: [ownerId], references: [id])
+  quarterSprint   QuarterSprint        @relation(fields: [quarterSprintId], references: [id], onDelete: Cascade)
+  insights        OperationalInsight[]
+
+  @@index([quarterSprintId])
+  @@index([ownerId])
+  @@index([status])
+}
+
+model Campaign {
+  id              Int                @id @default(autoincrement())
+  name            String
+  description     String?
+  fiscalYearId    Int
+  channelId       Int
+  ownerId         Int
+  quarterSprintId Int?
+  keyResultId     Int?
+  status          CampaignStatus     @default(PLANNED)
+  goal            String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  allocations     BudgetAllocation[]
+  budgetRequests  BudgetRequest[]
+  keyResult       KeyResult?         @relation(fields: [keyResultId], references: [id])
+  quarterSprint   QuarterSprint?     @relation(fields: [quarterSprintId], references: [id])
+  owner           MarketingUser      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  channel         MarketingChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  fiscalYear      FiscalYear         @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+
+  @@index([quarterSprintId])
+  @@index([keyResultId])
+  @@index([ownerId])
+  @@index([status])
+}
+
+model BudgetAllocation {
+  id              Int            @id @default(autoincrement())
+  campaignId      Int
+  fiscalYearId    Int
+  quarterSprintId Int?
+  allocated       Int
+  spent           Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  quarterSprint   QuarterSprint? @relation(fields: [quarterSprintId], references: [id])
+  fiscalYear      FiscalYear     @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  campaign        Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, fiscalYearId, quarterSprintId])
+  @@index([quarterSprintId])
+}
+
+model BudgetRequest {
+  id              Int                 @id @default(autoincrement())
+  title           String
+  fiscalYearId    Int
+  requesterId     Int
+  quarterSprintId Int?
+  keyResultId     Int?
+  campaignId      Int?
+  amount          Int
+  dueDate         DateTime
+  status          BudgetRequestStatus @default(PENDING_APPROVAL)
+  linkStatus      BudgetRequestLinkStatus @default(UNDEFINED_OBJECTIVE)
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  keyResult       KeyResult?          @relation(fields: [keyResultId], references: [id])
+  quarterSprint   QuarterSprint?      @relation(fields: [quarterSprintId], references: [id])
+  requester       MarketingUser       @relation("RequesterRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+  fiscalYear      FiscalYear          @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  campaign        Campaign?           @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([status, dueDate])
+  @@index([quarterSprintId])
+  @@index([keyResultId])
+  @@index([campaignId])
+}
+
+model OperationalInsight {
+  id                 Int         @id @default(autoincrement())
+  fiscalYearId       Int
+  title              String
+  description        String
+  priority           Int         @default(2)
+  insightType        InsightType @default(RECOMMENDATION)
+  relatedKeyResultId Int?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  relatedKeyResult   KeyResult?  @relation(fields: [relatedKeyResultId], references: [id])
+  fiscalYear         FiscalYear  @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+
+  @@index([priority])
+  @@index([relatedKeyResultId])
+}
+
 enum VisibilityScope {
   FULL
   VERTICAL
@@ -26,148 +271,37 @@ enum BudgetRequestStatus {
   REJECTED
 }
 
-model MarketingRole {
-  id          Int              @id @default(autoincrement())
-  key         String           @unique
-  name        String
-  description String?
-  visibility  VisibilityScope  @default(VERTICAL)
-  users       MarketingUser[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+enum BudgetRequestLinkStatus {
+  UNDEFINED_OBJECTIVE
+  ASSIGNMENT_PENDING
+  ASSIGNED_TO_CAMPAIGN
 }
 
-model MarketingUser {
-  id             Int                    @id @default(autoincrement())
-  fullName       String
-  email          String                 @unique
-  password       String                 // Hashed password for authentication
-  roleId         Int
-  role           MarketingRole          @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  verticals      MarketingUserVertical[]
-  ownedCampaigns Campaign[]
-  requests       BudgetRequest[]        @relation("RequesterRequests")
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+enum ObjectiveStatus {
+  ACTIVE
+  ARCHIVED
+  CANCELLED
 }
 
-model VerticalArea {
-  id          Int                    @id @default(autoincrement())
-  slug        String                 @unique
-  name        String
-  description String?
-  users       MarketingUserVertical[]
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+enum KeyResultStatus {
+  NOT_STARTED
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  COMPLETED
 }
 
-model MarketingUserVertical {
-  id           Int             @id @default(autoincrement())
-  userId       Int
-  verticalId   Int
-  visibility   VisibilityScope @default(VERTICAL)
-  user         MarketingUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vertical     VerticalArea    @relation(fields: [verticalId], references: [id], onDelete: Cascade)
-  assignedAt   DateTime        @default(now())
-
-  @@unique([userId, verticalId])
+enum CampaignStatus {
+  PLANNED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
 }
 
-model FiscalYear {
-  id              Int               @id @default(autoincrement())
-  code            String            @unique
-  label           String
-  totalBudget     Int
-  currency        String            @default("EUR")
-  budgetSnapshots BudgetSnapshot[]
-  allocations     BudgetAllocation[]
-  requests        BudgetRequest[]
-  insights        OperationalInsight[]
-  campaigns       Campaign[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-}
-
-model BudgetSnapshot {
-  id               Int         @id @default(autoincrement())
-  fiscalYearId     Int
-  label            String
-  amount           Int
-  trend            MetricTrend  @default(FLAT)
-  changePercentage Float
-  fiscalYear       FiscalYear   @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  @@unique([fiscalYearId, label])
-}
-
-model MarketingChannel {
-  id          Int         @id @default(autoincrement())
-  name        String
-  slug        String      @unique
-  description String?
-  campaigns   Campaign[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-}
-
-model Campaign {
-  id             Int                @id @default(autoincrement())
-  name           String
-  fiscalYearId   Int
-  channelId      Int
-  ownerId        Int
-  goal           String?
-  status         String             @default("active")
-  allocations    BudgetAllocation[]
-  fiscalYear     FiscalYear         @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
-  channel        MarketingChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  owner          MarketingUser      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-}
-
-model BudgetAllocation {
-  id           Int        @id @default(autoincrement())
-  campaignId   Int
-  fiscalYearId Int
-  allocated    Int
-  spent        Int         @default(0)
-  campaign     Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  fiscalYear   FiscalYear  @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  @@unique([campaignId, fiscalYearId])
-}
-
-model BudgetRequest {
-  id              Int                  @id @default(autoincrement())
-  title           String
-  fiscalYearId    Int
-  requesterId     Int
-  amount          Int
-  dueDate         DateTime
-  status          BudgetRequestStatus   @default(PENDING_APPROVAL)
-  notes           String?
-  fiscalYear      FiscalYear            @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
-  requester       MarketingUser         @relation("RequesterRequests", fields: [requesterId], references: [id], onDelete: Cascade)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-
-  @@index([status, dueDate])
-}
-
-model OperationalInsight {
-  id           Int        @id @default(autoincrement())
-  fiscalYearId Int
-  title        String
-  description  String
-  priority     Int        @default(2)
-  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  @@index([priority])
+enum InsightType {
+  RECOMMENDATION
+  WARNING
+  OPPORTUNITY
+  ACHIEVEMENT
 }

@@ -1,4 +1,4 @@
-# Guida Demo - Marketing Budget Hub
+# Guida Demo - Digimax Budget Hub
 
 ## Setup Iniziale
 

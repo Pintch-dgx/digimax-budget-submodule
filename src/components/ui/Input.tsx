@@ -14,11 +14,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={id}
           className={cn(
-            "w-full rounded-md border px-3 py-2 text-sm transition-colors",
-            "focus:outline-none focus:ring-2 focus:ring-offset-0",
-            error
-              ? "border-rose-500 focus:ring-rose-500 dark:border-rose-400"
-              : "border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800",
+            "w-full border-b border-[var(--color-neutral-200)] bg-transparent px-0 py-2 text-sm text-[var(--color-primary)] transition-colors",
+            "placeholder:text-[var(--color-neutral-400)] focus:border-[var(--color-secondary-cerulean)] focus:outline-none",
+            "dark:border-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)] dark:placeholder:text-[var(--color-tertiary-ice)]/70 dark:focus:border-[var(--color-secondary-industrial)]",
+            error && "border-rose-400 dark:border-[#ff9d9d]",
             className
           )}
           aria-invalid={error ? "true" : undefined}
@@ -26,7 +25,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <p id={errorId} className="mt-1 text-xs text-rose-600 dark:text-rose-400" role="alert">
+          <p id={errorId} className="mt-1 text-xs text-rose-600" role="alert">
             {error}
           </p>
         )}

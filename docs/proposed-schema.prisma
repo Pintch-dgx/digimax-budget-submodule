@@ -1,0 +1,206 @@
+// Schema Prisma Proposto - Ristrutturazione OKR
+// Da integrare nello schema principale dopo review
+
+enum ObjectiveStatus {
+  ACTIVE
+  ARCHIVED
+  CANCELLED
+}
+
+enum KeyResultStatus {
+  NOT_STARTED
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  COMPLETED
+}
+
+enum CampaignStatus {
+  PLANNED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum InsightType {
+  RECOMMENDATION
+  WARNING
+  OPPORTUNITY
+  ACHIEVEMENT
+}
+
+// ============================================
+// 1. OBJECTIVE - Obiettivo Strategico Annuale
+// ============================================
+model Objective {
+  id              Int           @id @default(autoincrement())
+  title           String        // "Aumentare lead generation del 40%"
+  description     String?
+  fiscalYearId    Int
+  ownerId         Int?          // Marketing Manager Nazionale
+  status          ObjectiveStatus @default(ACTIVE)
+  progress        Float?        // 0-100, calcolato da KR weighted
+  
+  fiscalYear      FiscalYear    @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  owner           MarketingUser? @relation("ObjectiveOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  quarterSprints  QuarterSprint[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([fiscalYearId])
+  @@index([ownerId])
+}
+
+// ============================================
+// 2. QUARTERSPRINT - Periodo Temporale + Obiettivo
+// ============================================
+model QuarterSprint {
+  id              Int           @id @default(autoincrement())
+  name            String        // "Q1 2025"
+  code            String?       @unique
+  shortCode       String?       // "Q1"
+  quarter         Int           // 1-4
+  startDate       DateTime      // Obbligatorio
+  endDate         DateTime      // Obbligatorio
+  fiscalYearId    Int           // Obbligatorio
+  objectiveId     Int           // Obbligatorio - collegamento a Objective
+  
+  fiscalYear      FiscalYear    @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  objective       Objective     @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  keyResults      KeyResult[]
+  campaigns       Campaign[]
+  budgetRequests  BudgetRequest[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([fiscalYearId, quarter]) // Un quarter per fiscal year
+  @@index([fiscalYearId])
+  @@index([objectiveId])
+}
+
+// ============================================
+// 3. KEYRESULT - Metriche Misurabili
+// ============================================
+model KeyResult {
+  id               Int                @id @default(autoincrement())
+  title            String             // "Lead generati da campagne digitali"
+  metric           String             // "lead_count"
+  targetValue      Float              // Obbligatorio, numerico
+  progressValue    Float?             @default(0)
+  unit             String             @default("unit")
+  weight           Int                @default(100) // Non nullable
+  status           KeyResultStatus    @default(NOT_STARTED)
+  quarterSprintId  Int                // Obbligatorio
+  ownerId          Int?               // Marketing Manager Regionale responsabile
+  
+  quarterSprint    QuarterSprint      @relation(fields: [quarterSprintId], references: [id], onDelete: Cascade)
+  owner            MarketingUser?      @relation("KeyResultOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  campaigns        Campaign[]
+  budgetRequests   BudgetRequest[]
+  insights         OperationalInsight[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  
+  @@index([quarterSprintId])
+  @@index([ownerId])
+  @@index([status])
+}
+
+// ============================================
+// 4. CAMPAIGN - Iniziative Tattiche
+// ============================================
+model Campaign {
+  id              Int                @id @default(autoincrement())
+  name            String
+  description     String?
+  fiscalYearId    Int
+  channelId       Int
+  ownerId         Int                // Marketing Manager Regionale
+  quarterSprintId Int?               // Opzionale per flessibilità
+  keyResultId     Int?               // Collegamento diretto a KeyResult
+  status          CampaignStatus     @default(PLANNED)
+  goal            String?            // Goal qualitativo della campagna
+  
+  fiscalYear      FiscalYear         @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  channel         MarketingChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  owner           MarketingUser      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  quarterSprint   QuarterSprint?     @relation(fields: [quarterSprintId], references: [id], onDelete: SetNull)
+  keyResult       KeyResult?         @relation(fields: [keyResultId], references: [id], onDelete: SetNull)
+  
+  allocations     BudgetAllocation[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  
+  @@index([quarterSprintId])
+  @@index([keyResultId])
+  @@index([ownerId])
+  @@index([status])
+}
+
+// ============================================
+// 5. BUDGET ALLOCATION - Tracking per Quarter
+// ============================================
+model BudgetAllocation {
+  id              Int           @id @default(autoincrement())
+  campaignId      Int
+  fiscalYearId    Int
+  quarterSprintId Int?          // Nuovo: tracking per quarter
+  allocated       Int
+  spent           Int           @default(0)
+  
+  campaign        Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  fiscalYear      FiscalYear    @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  quarterSprint   QuarterSprint? @relation(fields: [quarterSprintId], references: [id], onDelete: SetNull)
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([campaignId, fiscalYearId, quarterSprintId]) // Permette allocazioni multiple per quarter
+  @@index([quarterSprintId])
+}
+
+// ============================================
+// 6. OPERATIONAL INSIGHT - Solo per Insights
+// ============================================
+model OperationalInsight {
+  id                Int        @id @default(autoincrement())
+  fiscalYearId      Int
+  title             String
+  description       String
+  priority          Int        @default(2)
+  insightType       InsightType @default(RECOMMENDATION)
+  relatedKeyResultId Int?      // Opzionale: può riferirsi a un KR specifico
+  
+  fiscalYear        FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  relatedKeyResult  KeyResult? @relation(fields: [relatedKeyResultId], references: [id], onDelete: SetNull)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  @@index([priority])
+  @@index([relatedKeyResultId])
+}
+
+// ============================================
+// AGGIORNAMENTI MarketingUser
+// ============================================
+// Aggiungere queste relazioni a MarketingUser:
+// 
+// model MarketingUser {
+//   // ... campi esistenti ...
+//   ownedObjectives  Objective[]      @relation("ObjectiveOwner")
+//   ownedKeyResults  KeyResult[]     @relation("KeyResultOwner")
+//   // ... resto campi ...
+// }
+
+// ============================================
+// AGGIORNAMENTI FiscalYear
+// ============================================
+// Aggiungere questa relazione a FiscalYear:
+//
+// model FiscalYear {
+//   // ... campi esistenti ...
+//   objectives      Objective[]
+//   // ... resto campi ...
+// }
+

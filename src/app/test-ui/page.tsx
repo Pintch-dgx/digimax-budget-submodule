@@ -9,9 +9,9 @@ export default function TestUIPage() {
   const inputError = "Questo campo è obbligatorio";
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 dark:bg-slate-950">
+    <div className="min-h-screen bg-[var(--background)] p-8">
       <div className="mx-auto max-w-4xl space-y-8">
-        <h1 className="text-3xl font-bold">UI Kit Test Page</h1>
+        <h1 className="text-3xl font-bold text-[var(--color-primary)]">UI Kit Test Page</h1>
 
         {/* Buttons */}
         <Card>
@@ -53,7 +53,9 @@ export default function TestUIPage() {
           <CardContent>
             <Button onClick={() => setModalOpen(true)}>Apri Modal</Button>
             <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Test Modal" size="md">
-              <p className="mb-4">Questo è un modal di test. Puoi chiuderlo cliccando fuori o sul pulsante X.</p>
+              <p className="mb-4 text-[var(--color-neutral-500)]">
+                Questo è un modal di test. Puoi chiuderlo cliccando fuori o sul pulsante X.
+              </p>
               <Button onClick={() => setModalOpen(false)}>Chiudi</Button>
             </Modal>
           </CardContent>
