@@ -2,7 +2,6 @@ import { SummaryCard } from "@/components/SummaryCard";
 import { getDashboardData } from "@/lib/dashboard-service";
 import { DashboardWrapper } from "@/components/layout/DashboardWrapper";
 import { CampaignAllocationsTable } from "@/components/dashboard/CampaignAllocationsTable";
-import { QuarterTimeline } from "@/components/dashboard/QuarterTimeline";
 import { ApprovalsCard } from "@/components/dashboard/ApprovalsCard";
 import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
 import Link from "next/link";
@@ -13,10 +12,10 @@ export default async function Home() {
     dashboardData = await getDashboardData();
   } catch (error) {
     console.error("Error loading dashboard data:", error);
-    dashboardData = { summaryMetrics: [], campaignAllocations: [], upcomingApprovals: [], insights: [], quarterTimeline: [] };
+    dashboardData = { summaryMetrics: [], campaignAllocations: [], upcomingApprovals: [], insights: [] };
   }
 
-  const { summaryMetrics, campaignAllocations, upcomingApprovals, insights, quarterTimeline } = dashboardData;
+  const { summaryMetrics, campaignAllocations = [], upcomingApprovals, insights } = dashboardData;
 
   return (
     <DashboardWrapper>
@@ -61,19 +60,7 @@ export default async function Home() {
 
         {/* Main Content Grid */}
         <section className="flex flex-col gap-6" aria-label="Dashboard content">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(260px,1fr)_minmax(0,3fr)]">
-            <ApprovalsCard approvals={upcomingApprovals} />
-
-            <Card className="min-w-0 overflow-hidden">
-              <CardHeader>
-                <CardTitle>Timeline quarter sprint</CardTitle>
-                <CardDescription>Visualizza l'obiettivo di ogni quarter in sequenza.</CardDescription>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <QuarterTimeline quarters={quarterTimeline} />
-              </CardContent>
-            </Card>
-          </div>
+          <ApprovalsCard approvals={upcomingApprovals} />
 
           <Card className="min-w-0 overflow-hidden">
             <CardHeader>
@@ -104,7 +91,7 @@ export default async function Home() {
               </div>
             </CardHeader>
             <CardContent className="overflow-x-auto">
-              <CampaignAllocationsTable data={campaignAllocations} />
+              <CampaignAllocationsTable data={campaignAllocations || []} />
             </CardContent>
           </Card>
         </section>

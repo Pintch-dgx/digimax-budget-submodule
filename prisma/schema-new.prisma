@@ -109,7 +109,6 @@ model Objective {
   owner        MarketingUser?  @relation("ObjectiveOwner", fields: [ownerId], references: [id])
   fiscalYear   FiscalYear      @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
   campaigns    Campaign[]
-  keyResults   KeyResult[]     @relation("ObjectiveKeyResults")
 
   @@index([fiscalYearId])
   @@index([ownerId])
@@ -136,10 +135,6 @@ model Campaign {
   // Foreign key opzionale
   objectiveId     Int?
   
-  // Budget tracking
-  allocatedBudget Float              @default(0)  // Valorizzato da richiesta budget approvata
-  spentBudget     Float              @default(0)  // Inserito manualmente
-  
   // Altri campi
   status          CampaignStatus     @default(PLANNED)
   goal            String?
@@ -149,6 +144,7 @@ model Campaign {
   // Relazioni
   allocations     BudgetAllocation[]
   budgetRequests  BudgetRequest[]
+  keyResults      KeyResult[]        // KeyResult ora appartiene a Campaign
   objective       Objective?         @relation(fields: [objectiveId], references: [id])
   owner           MarketingUser      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   channel         MarketingChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -169,15 +165,16 @@ model KeyResult {
   unit            String               @default("unit")
   weight          Int                  @default(100)
   status          KeyResultStatus      @default(NOT_STARTED)
-  objectiveId     Int?                 // Collegato all'Obiettivo Strategico
+  campaignId      Int                  // Cambiato da quarterSprintId
   ownerId         Int?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
+  budgetRequests  BudgetRequest[]
   owner           MarketingUser?       @relation("KeyResultOwner", fields: [ownerId], references: [id])
-  objective       Objective?           @relation("ObjectiveKeyResults", fields: [objectiveId], references: [id], onDelete: Cascade)
+  campaign        Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   insights        OperationalInsight[]
 
-  @@index([objectiveId])
+  @@index([campaignId])
   @@index([ownerId])
   @@index([status])
 }
@@ -202,20 +199,23 @@ model BudgetRequest {
   title          String
   fiscalYearId   Int
   requesterId    Int
-  campaignId     Int                     // Obbligatorio - richiesta sempre collegata a campagna
-  amount         Float                   // Cambiato da Int per supportare decimali
+  campaignId     Int?
+  keyResultId    Int?
+  amount         Int
   dueDate        DateTime
   status         BudgetRequestStatus     @default(PENDING_APPROVAL)
   linkStatus     BudgetRequestLinkStatus @default(UNDEFINED_OBJECTIVE)
   notes          String?
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt
-  campaign       Campaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  keyResult      KeyResult?              @relation(fields: [keyResultId], references: [id])
+  campaign       Campaign?               @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   requester      MarketingUser           @relation("RequesterRequests", fields: [requesterId], references: [id], onDelete: Cascade)
   fiscalYear     FiscalYear              @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
 
   @@index([status, dueDate])
   @@index([campaignId])
+  @@index([keyResultId])
 }
 
 model OperationalInsight {
@@ -251,7 +251,6 @@ enum BudgetRequestStatus {
   DRAFT
   PENDING_APPROVAL
   APPROVED
-  APPROVED_WITH_CHANGES  // Approvata con modifiche dall'admin
   REJECTED
 }
 

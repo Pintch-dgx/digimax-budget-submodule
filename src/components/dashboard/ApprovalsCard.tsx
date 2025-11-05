@@ -76,9 +76,9 @@ export function ApprovalsCard({ approvals }: { approvals: UpcomingApproval[] }) 
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--color-neutral-500)]">
-                    <span>Importo: <strong className="text-[var(--color-primary)]">{formatCurrency(approval.amount)}</strong></span>
+                    <span>Importo: <strong className="text-[var(--color-primary)]" suppressHydrationWarning>{formatCurrency(approval.amount)}</strong></span>
                     <span>
-                      Scadenza <time dateTime={approval.dueDate}>{dueLabel}</time>
+                      Scadenza <time dateTime={approval.dueDate} suppressHydrationWarning>{dueLabel}</time>
                     </span>
                   </div>
 

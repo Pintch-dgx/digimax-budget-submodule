@@ -9,7 +9,6 @@ async function main() {
     await tx.budgetRequest.deleteMany({});
     await tx.campaign.deleteMany({});
     await tx.keyResult.deleteMany({});
-    await tx.quarterSprint.deleteMany({});
     await tx.objective.deleteMany({});
     await tx.marketingChannel.deleteMany({});
     await tx.operationalInsight.deleteMany({});
@@ -161,6 +160,7 @@ async function main() {
     ],
   });
 
+  // Obiettivi Strategici
   const conversionObjective = await prisma.objective.create({
     data: {
       title: "Conversion Rate Landing Page",
@@ -181,6 +181,54 @@ async function main() {
     },
   });
 
+  const abmObjective = await prisma.objective.create({
+    data: {
+      title: "Opportunità Pipeline ABM",
+      description: "Generare nuove opportunità di business attraverso strategie ABM su account enterprise",
+      fiscalYearId: fiscalYear.id,
+      ownerId: chiara.id,
+      status: "ACTIVE",
+    },
+  });
+
+  // Key Results collegati agli Obiettivi Strategici
+  const krDigitalReach = await prisma.keyResult.create({
+    data: {
+      title: "MQL generati da campagne digital",
+      metric: "MQL",
+      targetValue: 250,
+      progressValue: 0,
+      unit: "leads",
+      weight: 120,
+      objectiveId: conversionObjective.id,
+    },
+  });
+
+  const krEventPipeline = await prisma.keyResult.create({
+    data: {
+      title: "Lead qualificati da eventi",
+      metric: "Lead qualificati",
+      targetValue: 180,
+      progressValue: 0,
+      unit: "contatti",
+      weight: 100,
+      objectiveId: eventObjective.id,
+    },
+  });
+
+  const krABMPipeline = await prisma.keyResult.create({
+    data: {
+      title: "Opportunità pipeline ABM",
+      metric: "Opportunità",
+      targetValue: 45,
+      progressValue: 0,
+      unit: "opportunità",
+      weight: 90,
+      objectiveId: abmObjective.id,
+    },
+  });
+
+  // Canali Marketing
   const digitalChannel = await prisma.marketingChannel.create({
     data: {
       name: "Digital",
@@ -205,141 +253,68 @@ async function main() {
     },
   });
 
-  const q3Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Quarter Sprint Q3",
-      code: "QS-FY24-Q3",
-      shortCode: "Q3",
-      objectiveSummary: "Consolidare la presenza digitale e preparare il lancio autunnale.",
-      quarter: 3,
-      startDate: new Date("2024-07-01"),
-      endDate: new Date("2024-09-30"),
-      fiscalYearId: fiscalYear.id,
-      objectiveId: conversionObjective.id,
-    },
-  });
-
-  const q4Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Quarter Sprint Q4",
-      code: "QS-FY24-Q4",
-      shortCode: "Q4",
-      objectiveSummary: "Generare lead qualificati e rafforzare la loyalty clienti.",
-      quarter: 4,
-      startDate: new Date("2024-10-01"),
-      endDate: new Date("2024-12-31"),
-      fiscalYearId: fiscalYear.id,
-      objectiveId: conversionObjective.id,
-    },
-  });
-
-  const eventsSprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Quarter Sprint Eventi",
-      code: "QS-FY24-EVENT",
-      shortCode: "EVT",
-      objectiveSummary: "Coordinare eventi di relazione e partnership strategiche.",
-      quarter: 2,
-      startDate: new Date("2024-05-01"),
-      endDate: new Date("2024-08-31"),
-      fiscalYearId: fiscalYear.id,
-      objectiveId: eventObjective.id,
-    },
-  });
-
-  const krDigitalReach = await prisma.keyResult.create({
-    data: {
-      title: "MQL generati da campagne digital",
-      metric: "MQL",
-      targetValue: 250,
-      progressValue: 0,
-      unit: "leads",
-      weight: 120,
-      quarterSprintId: q3Sprint.id,
-    },
-  });
-
-  const krEventPipeline = await prisma.keyResult.create({
-    data: {
-      title: "Lead qualificati da eventi",
-      metric: "Lead qualificati",
-      targetValue: 180,
-      progressValue: 0,
-      unit: "contatti",
-      weight: 100,
-      quarterSprintId: eventsSprint.id,
-    },
-  });
-
-  const krABMPipeline = await prisma.keyResult.create({
-    data: {
-      title: "Opportunità pipeline ABM",
-      metric: "Opportunità",
-      targetValue: 45,
-      progressValue: 0,
-      unit: "opportunità",
-      weight: 90,
-      quarterSprintId: q4Sprint.id,
-    },
-  });
-
-  await prisma.campaign.create({
+  // Campagne Q3 2024
+  const campaign1 = await prisma.campaign.create({
     data: {
       name: "Brand Refresh Q3",
+      description: "Rafforzare la percezione del brand e migliorare la UX dei touchpoint digitali.",
+      code: "CAMP-FY24-Q3-001",
+      shortCode: "BR-Q3",
+      startDate: new Date("2024-07-01"),
+      endDate: new Date("2024-09-30"),
+      quarter: 3,
       fiscalYearId: fiscalYear.id,
       channelId: digitalChannel.id,
       ownerId: elena.id,
-      quarterSprintId: q3Sprint.id,
-      keyResultId: krDigitalReach.id,
+      objectiveId: conversionObjective.id,
       goal: "Rafforzare la percezione del brand e migliorare la UX dei touchpoint digitali.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear.id,
-          allocated: 320_000,
-          spent: 185_000,
-        },
-      },
+      allocatedBudget: 320_000,
+      spentBudget: 185_000,
+      status: "COMPLETED",
     },
   });
 
-  await prisma.campaign.create({
+  const campaign2 = await prisma.campaign.create({
     data: {
       name: "Evento Clienti Milano",
+      description: "Evento di networking con clienti chiave del Nord Italia.",
+      code: "CAMP-FY24-Q2-002",
+      shortCode: "ECM",
+      startDate: new Date("2024-05-01"),
+      endDate: new Date("2024-08-31"),
+      quarter: 2,
       fiscalYearId: fiscalYear.id,
       channelId: eventsChannel.id,
       ownerId: marco.id,
-      quarterSprintId: eventsSprint.id,
-      keyResultId: krEventPipeline.id,
+      objectiveId: eventObjective.id,
       goal: "Evento di networking con clienti chiave del Nord Italia.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear.id,
-          allocated: 210_000,
-          spent: 190_000,
-        },
-      },
+      allocatedBudget: 210_000,
+      spentBudget: 190_000,
+      status: "COMPLETED",
     },
   });
 
-  await prisma.campaign.create({
+  const campaign3 = await prisma.campaign.create({
     data: {
       name: "Programma ABM Enterprise",
+      description: "Targeting su 50 account enterprise con campagne personalizzate.",
+      code: "CAMP-FY24-Q4-003",
+      shortCode: "ABM-ENT",
+      startDate: new Date("2024-10-01"),
+      endDate: new Date("2024-12-31"),
+      quarter: 4,
       fiscalYearId: fiscalYear.id,
       channelId: abmChannel.id,
       ownerId: chiara.id,
-      quarterSprintId: q4Sprint.id,
-      keyResultId: krABMPipeline.id,
+      objectiveId: abmObjective.id,
       goal: "Targeting su 50 account enterprise con campagne personalizzate.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear.id,
-          allocated: 450_000,
-          spent: 320_000,
-        },
-      },
+      allocatedBudget: 450_000,
+      spentBudget: 320_000,
+      status: "ACTIVE",
     },
   });
 
+  // Richieste di Budget collegate alle campagne
   const now = new Date();
 
   await prisma.budgetRequest.createMany({
@@ -348,34 +323,31 @@ async function main() {
         title: "Richiesta Budget Q4 - Content Marketing",
         fiscalYearId: fiscalYear.id,
         requesterId: elena.id,
+        campaignId: campaign1.id,
         amount: 85_000,
         dueDate: new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000),
         status: BudgetRequestStatus.PENDING_APPROVAL,
         notes: "Budget per produzione contenuti video e infografiche.",
-        quarterSprintId: q4Sprint.id,
-        keyResultId: krDigitalReach.id,
       },
       {
         title: "Richiesta Budget Fiera IT Expo",
         fiscalYearId: fiscalYear.id,
         requesterId: marco.id,
+        campaignId: campaign2.id,
         amount: 120_000,
         dueDate: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000),
         status: BudgetRequestStatus.APPROVED,
         notes: "Fiera IT Expo con stand e networking event.",
-        quarterSprintId: eventsSprint.id,
-        keyResultId: krEventPipeline.id,
       },
       {
         title: "Richiesta Budget Campagna ABM",
         fiscalYearId: fiscalYear.id,
         requesterId: chiara.id,
+        campaignId: campaign3.id,
         amount: 95_000,
         dueDate: new Date(now.getTime() + 16 * 24 * 60 * 60 * 1000),
         status: BudgetRequestStatus.REJECTED,
         notes: "Campagna ABM su 30 account mid-market.",
-        quarterSprintId: q4Sprint.id,
-        keyResultId: krABMPipeline.id,
       },
     ],
   });
@@ -425,106 +397,7 @@ async function main() {
     },
   });
 
-  // Quarter Sprint da novembre 2024 in poi
-  const novDecSprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Novembre-Dicembre 2024",
-      code: "QS-FY25-NOV-DEC",
-      shortCode: "N-D",
-      objectiveSummary: "Chiusura anno con focus su acquisizione e retention.",
-      quarter: 4,
-      startDate: new Date("2024-11-01"),
-      endDate: new Date("2024-12-31"),
-      fiscalYearId: fiscalYear2025.id,
-      objectiveId: novemberObjective.id,
-    },
-  });
-
-  const jan2025Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Gennaio 2025",
-      code: "QS-FY25-JAN",
-      shortCode: "JAN",
-      objectiveSummary: "Avvio anno fiscale con campagne di lancio prodotti.",
-      quarter: 1,
-      startDate: new Date("2025-01-01"),
-      endDate: new Date("2025-01-31"),
-      fiscalYearId: fiscalYear2025.id,
-      objectiveId: q1_2025Objective.id,
-    },
-  });
-
-  const feb2025Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Febbraio 2025",
-      code: "QS-FY25-FEB",
-      shortCode: "FEB",
-      objectiveSummary: "Crescita awareness e engagement attraverso contenuti educativi.",
-      quarter: 1,
-      startDate: new Date("2025-02-01"),
-      endDate: new Date("2025-02-28"),
-      fiscalYearId: fiscalYear2025.id,
-      objectiveId: decemberObjective.id,
-    },
-  });
-
-  const mar2025Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Marzo 2025",
-      code: "QS-FY25-MAR",
-      shortCode: "MAR",
-      objectiveSummary: "Consolidamento posizionamento e preparazione Q2.",
-      quarter: 1,
-      startDate: new Date("2025-03-01"),
-      endDate: new Date("2025-03-31"),
-      fiscalYearId: fiscalYear2025.id,
-      objectiveId: q1_2025Objective.id,
-    },
-  });
-
-  const apr2025Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Aprile 2025",
-      code: "QS-FY25-APR",
-      shortCode: "APR",
-      objectiveSummary: "Apertura Q2 con focus su eventi e partnership.",
-      quarter: 2,
-      startDate: new Date("2025-04-01"),
-      endDate: new Date("2025-04-30"),
-      fiscalYearId: fiscalYear2025.id,
-      objectiveId: novemberObjective.id,
-    },
-  });
-
-  const may2025Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Maggio 2025",
-      code: "QS-FY25-MAY",
-      shortCode: "MAY",
-      objectiveSummary: "Espansione campagne digitali e ottimizzazione conversioni.",
-      quarter: 2,
-      startDate: new Date("2025-05-01"),
-      endDate: new Date("2025-05-31"),
-      fiscalYearId: fiscalYear2025.id,
-      objectiveId: decemberObjective.id,
-    },
-  });
-
-  const jun2025Sprint = await prisma.quarterSprint.create({
-    data: {
-      name: "Giugno 2025",
-      code: "QS-FY25-JUN",
-      shortCode: "JUN",
-      objectiveSummary: "Chiusura semestre con analisi performance e pianificazione H2.",
-      quarter: 2,
-      startDate: new Date("2025-06-01"),
-      endDate: new Date("2025-06-30"),
-      fiscalYearId: fiscalYear2025.id,
-      objectiveId: q1_2025Objective.id,
-    },
-  });
-
-  // Key Results per i nuovi quarter sprint
+  // Key Results per il 2025
   const krNovDec = await prisma.keyResult.create({
     data: {
       title: "MQL generati Novembre-Dicembre",
@@ -533,7 +406,7 @@ async function main() {
       progressValue: 0,
       unit: "leads",
       weight: 100,
-      quarterSprintId: novDecSprint.id,
+      objectiveId: novemberObjective.id,
     },
   });
 
@@ -545,7 +418,7 @@ async function main() {
       progressValue: 0,
       unit: "leads",
       weight: 120,
-      quarterSprintId: jan2025Sprint.id,
+      objectiveId: q1_2025Objective.id,
     },
   });
 
@@ -557,7 +430,7 @@ async function main() {
       progressValue: 0,
       unit: "%",
       weight: 90,
-      quarterSprintId: feb2025Sprint.id,
+      objectiveId: decemberObjective.id,
     },
   });
 
@@ -569,7 +442,7 @@ async function main() {
       progressValue: 0,
       unit: "%",
       weight: 100,
-      quarterSprintId: mar2025Sprint.id,
+      objectiveId: q1_2025Objective.id,
     },
   });
 
@@ -581,7 +454,7 @@ async function main() {
       progressValue: 0,
       unit: "leads",
       weight: 110,
-      quarterSprintId: apr2025Sprint.id,
+      objectiveId: novemberObjective.id,
     },
   });
 
@@ -593,7 +466,7 @@ async function main() {
       progressValue: 0,
       unit: "ratio",
       weight: 100,
-      quarterSprintId: may2025Sprint.id,
+      objectiveId: decemberObjective.id,
     },
   });
 
@@ -605,143 +478,160 @@ async function main() {
       progressValue: 0,
       unit: "EUR",
       weight: 120,
-      quarterSprintId: jun2025Sprint.id,
+      objectiveId: q1_2025Objective.id,
     },
   });
 
   // Campagne da novembre 2024 in poi
-  await prisma.campaign.create({
+  const camp2024Nov = await prisma.campaign.create({
     data: {
       name: "Campagna Natale 2024 - Nord Europa",
+      description: "Crescita awareness e acquisizione nuovi clienti nei mercati nordici durante il periodo natalizio.",
+      code: "CAMP-FY25-NOV-001",
+      shortCode: "XMAS-24",
+      startDate: new Date("2024-11-01"),
+      endDate: new Date("2024-12-31"),
+      quarter: 4,
       fiscalYearId: fiscalYear2025.id,
       channelId: digitalChannel.id,
       ownerId: elena.id,
-      quarterSprintId: novDecSprint.id,
-      keyResultId: krNovDec.id,
+      objectiveId: novemberObjective.id,
       goal: "Crescita awareness e acquisizione nuovi clienti nei mercati nordici durante il periodo natalizio.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear2025.id,
-          allocated: 280_000,
-          spent: 0,
-        },
-      },
+      allocatedBudget: 0,
+      spentBudget: 0,
+      status: "PLANNED",
     },
   });
 
-  await prisma.campaign.create({
+  const camp2025Jan = await prisma.campaign.create({
     data: {
       name: "Lancio Nuova Piattaforma Gennaio 2025",
+      description: "Lancio comunicativo della nuova piattaforma digitale con focus su lead generation.",
+      code: "CAMP-FY25-JAN-002",
+      shortCode: "PLAT-JAN",
+      startDate: new Date("2025-01-01"),
+      endDate: new Date("2025-01-31"),
+      quarter: 1,
       fiscalYearId: fiscalYear2025.id,
       channelId: digitalChannel.id,
       ownerId: marco.id,
-      quarterSprintId: jan2025Sprint.id,
-      keyResultId: krJan2025.id,
+      objectiveId: q1_2025Objective.id,
       goal: "Lancio comunicativo della nuova piattaforma digitale con focus su lead generation.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear2025.id,
-          allocated: 450_000,
-          spent: 0,
-        },
-      },
+      allocatedBudget: 0,
+      spentBudget: 0,
+      status: "PLANNED",
     },
   });
 
-  await prisma.campaign.create({
+  const camp2025Feb = await prisma.campaign.create({
     data: {
       name: "Content Hub Educativo Febbraio 2025",
+      description: "Creazione e distribuzione contenuti educativi per aumentare engagement e brand authority.",
+      code: "CAMP-FY25-FEB-003",
+      shortCode: "CONT-FEB",
+      startDate: new Date("2025-02-01"),
+      endDate: new Date("2025-02-28"),
+      quarter: 1,
       fiscalYearId: fiscalYear2025.id,
       channelId: digitalChannel.id,
       ownerId: chiara.id,
-      quarterSprintId: feb2025Sprint.id,
-      keyResultId: krFeb2025.id,
+      objectiveId: decemberObjective.id,
       goal: "Creazione e distribuzione contenuti educativi per aumentare engagement e brand authority.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear2025.id,
-          allocated: 180_000,
-          spent: 0,
-        },
-      },
+      allocatedBudget: 0,
+      spentBudget: 0,
+      status: "PLANNED",
     },
   });
 
-  await prisma.campaign.create({
+  const camp2025Mar = await prisma.campaign.create({
     data: {
       name: "Ottimizzazione Conversioni Marzo 2025",
+      description: "Test e ottimizzazione landing pages per migliorare il conversion rate.",
+      code: "CAMP-FY25-MAR-004",
+      shortCode: "CONV-MAR",
+      startDate: new Date("2025-03-01"),
+      endDate: new Date("2025-03-31"),
+      quarter: 1,
       fiscalYearId: fiscalYear2025.id,
       channelId: digitalChannel.id,
       ownerId: elena.id,
-      quarterSprintId: mar2025Sprint.id,
-      keyResultId: krMar2025.id,
+      objectiveId: q1_2025Objective.id,
       goal: "Test e ottimizzazione landing pages per migliorare il conversion rate.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear2025.id,
-          allocated: 120_000,
-          spent: 0,
-        },
-      },
+      allocatedBudget: 0,
+      spentBudget: 0,
+      status: "PLANNED",
     },
   });
 
-  await prisma.campaign.create({
+  const camp2025Apr = await prisma.campaign.create({
     data: {
       name: "Evento Fiera Milano Aprile 2025",
+      description: "Partecipazione a fiera di settore con stand e networking event.",
+      code: "CAMP-FY25-APR-005",
+      shortCode: "FIERA-APR",
+      startDate: new Date("2025-04-01"),
+      endDate: new Date("2025-04-30"),
+      quarter: 2,
       fiscalYearId: fiscalYear2025.id,
       channelId: eventsChannel.id,
       ownerId: marco.id,
-      quarterSprintId: apr2025Sprint.id,
-      keyResultId: krApr2025.id,
+      objectiveId: novemberObjective.id,
       goal: "Partecipazione a fiera di settore con stand e networking event.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear2025.id,
-          allocated: 350_000,
-          spent: 0,
-        },
-      },
+      allocatedBudget: 0,
+      spentBudget: 0,
+      status: "PLANNED",
     },
   });
 
-  await prisma.campaign.create({
+  const camp2025May = await prisma.campaign.create({
     data: {
       name: "Performance Marketing Maggio 2025",
+      description: "Campagne performance su Google Ads e LinkedIn per massimizzare ROAS.",
+      code: "CAMP-FY25-MAY-006",
+      shortCode: "PERF-MAY",
+      startDate: new Date("2025-05-01"),
+      endDate: new Date("2025-05-31"),
+      quarter: 2,
       fiscalYearId: fiscalYear2025.id,
       channelId: digitalChannel.id,
       ownerId: chiara.id,
-      quarterSprintId: may2025Sprint.id,
-      keyResultId: krMay2025.id,
+      objectiveId: decemberObjective.id,
       goal: "Campagne performance su Google Ads e LinkedIn per massimizzare ROAS.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear2025.id,
-          allocated: 520_000,
-          spent: 0,
-        },
-      },
+      allocatedBudget: 0,
+      spentBudget: 0,
+      status: "PLANNED",
     },
   });
 
-  await prisma.campaign.create({
+  const camp2025Jun = await prisma.campaign.create({
     data: {
       name: "Programma ABM Enterprise Giugno 2025",
+      description: "Targeting su 80 account enterprise con campagne personalizzate e account-based tactics.",
+      code: "CAMP-FY25-JUN-007",
+      shortCode: "ABM-JUN",
+      startDate: new Date("2025-06-01"),
+      endDate: new Date("2025-06-30"),
+      quarter: 2,
       fiscalYearId: fiscalYear2025.id,
       channelId: abmChannel.id,
       ownerId: elena.id,
-      quarterSprintId: jun2025Sprint.id,
-      keyResultId: krJun2025.id,
+      objectiveId: q1_2025Objective.id,
       goal: "Targeting su 80 account enterprise con campagne personalizzate e account-based tactics.",
-      allocations: {
-        create: {
-          fiscalYearId: fiscalYear2025.id,
-          allocated: 680_000,
-          spent: 0,
-        },
-      },
+      allocatedBudget: 0,
+      spentBudget: 0,
+      status: "PLANNED",
     },
   });
+
+  console.log("✅ Seed completato con successo!");
+  console.log(`- ${3} Ruoli creati`);
+  console.log(`- ${4} Utenti creati`);
+  console.log(`- ${2} Fiscal Years creati`);
+  console.log(`- ${6} Obiettivi Strategici creati`);
+  console.log(`- ${10} Key Results creati`);
+  console.log(`- ${3} Canali Marketing creati`);
+  console.log(`- ${10} Campagne create`);
+  console.log(`- ${3} Budget Requests create`);
 }
 
 main()
@@ -755,4 +645,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

@@ -40,7 +40,7 @@ export type KeyResultOption = {
   unit?: string | null;
   weight?: number;
   status?: string;
-  quarterSprintId: number;
+  campaignId: number | null;
   ownerId?: number | null;
 };
 

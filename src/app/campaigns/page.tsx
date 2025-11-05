@@ -1,8 +1,21 @@
+import { getServerSession } from "next-auth";
 import { DashboardWrapper } from "@/components/layout/DashboardWrapper";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
+import { Card, CardContent } from "@/components/ui";
 import { CampaignsList } from "@/components/campaigns/CampaignsList";
+import { authOptions } from "@/lib/auth";
+import { resolveUserRole } from "@/lib/role-guards";
 
-export default function CampaignsPage() {
+export default async function CampaignsPage() {
+  const session = await getServerSession(authOptions);
+  const role = await resolveUserRole(session);
+  const canCreateCampaign = role === "admin" || role === "MARKETING_MANAGER";
+  const userId =
+    typeof session?.user?.id === "string"
+      ? session?.user?.id
+      : session?.user?.id != null
+        ? String(session?.user?.id)
+        : null;
+
   return (
     <DashboardWrapper>
       <div className="flex flex-col gap-8">

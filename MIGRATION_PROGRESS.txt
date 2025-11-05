@@ -1,0 +1,52 @@
+SCHEMA REFACTORING PROGRESS
+==========================
+Date: November 4, 2025
+
+COMPLETED:
+✅ Database backup
+✅ Schema backup
+✅ New schema created (Campaign-Objective-KeyResult)
+✅ Database reset and recreated
+✅ Prisma client regenerated
+✅ New seed data created and applied
+✅ Deleted QuarterSprint files (API + components)
+✅ Updated: src/app/api/key-results/route.ts (GET/POST)
+✅ Updated: src/app/api/key-results/[id]/route.ts (PATCH)
+
+IN PROGRESS:
+🔄 API endpoints update
+🔄 UI components update
+
+TODO:
+- Update: src/app/api/budget-requests/route.ts
+- Update: src/app/api/budget-requests/[id]/route.ts
+- Update: src/app/api/objectives/route.ts  
+- Update: src/app/api/objectives/[id]/route.ts
+- Update: src/components/okr/OkrSheetManager.tsx
+- Update: src/components/okr/CreateKeyResultModal.tsx
+- Update: src/app/budget-requests/new/page.tsx
+- Update: src/app/campaigns/new/page.tsx
+- Update: src/lib/dashboard-service.ts
+- Update: src/app/page.tsx
+
+FILES REMOVED:
+- src/app/api/quarter-sprints/
+- src/components/okr/CreateQuarterSprintModal.tsx
+- src/components/dashboard/QuarterTimeline.tsx
+
+NEW SCHEMA:
+Campaign now includes:
+- startDate, endDate, quarter (from QuarterSprint)
+- code, shortCode (from QuarterSprint)
+- objectiveId (link to Objective)
+
+KeyResult now uses:
+- campaignId (instead of quarterSprintId)
+
+BudgetRequest simplified:
+- Removed quarterSprintId
+- Only campaignId and keyResultId
+
+Remaining work: ~12 files to update
+Estimated time: ~5-8 hours
+

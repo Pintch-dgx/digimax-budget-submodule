@@ -136,6 +136,22 @@ async function main() {
     },
   });
 
+  // Create standard user role (Requester)
+  const requesterRole = await prisma.marketingRole.upsert({
+    where: { key: "USER" },
+    update: {
+      name: "Utente Standard",
+      description: "Utente standard che può creare richieste budget.",
+      visibility: VisibilityScope.LIMITED,
+    },
+    create: {
+      key: "USER",
+      name: "Utente Standard",
+      description: "Utente standard che può creare richieste budget.",
+      visibility: VisibilityScope.LIMITED,
+    },
+  });
+
   // Create Vertical Areas
   const digitalVertical = await prisma.verticalArea.create({
     data: {
@@ -228,6 +244,22 @@ async function main() {
           },
         ],
       },
+    },
+  });
+
+  // Create Requester user (standard user for testing)
+  const requesterUser = await prisma.marketingUser.upsert({
+    where: { email: "requester@digimax.mock" },
+    update: {
+      fullName: "Mario Requester",
+      roleId: requesterRole.id,
+      password: defaultPassword,
+    },
+    create: {
+      fullName: "Mario Requester",
+      email: "requester@digimax.mock",
+      roleId: requesterRole.id,
+      password: defaultPassword,
     },
   });
 
@@ -407,6 +439,7 @@ async function main() {
   console.info("✅ Demo data seeded successfully!");
   console.info("📧 Login credentials:");
   console.info("   Admin: admin@example.com / admin123");
+  console.info("   Requester: requester@digimax.mock / demo123");
   console.info("   Demo users (all with password 'demo123'):");
   console.info("   - elena.ferri@digimax.mock");
   console.info("   - marco.neri@digimax.mock");

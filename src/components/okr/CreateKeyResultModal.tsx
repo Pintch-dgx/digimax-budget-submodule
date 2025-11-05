@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 import { Modal, Input, Select, Button, useToast } from "@/components/ui";
 
-interface QuarterSprintOption {
+interface ObjectiveOption {
   id: string;
-  name: string;
-  objectiveTitle: string;
+  title: string;
 }
 
 interface CreateKeyResultModalProps {
@@ -15,14 +14,14 @@ interface CreateKeyResultModalProps {
   onSave: (data: {
     title: string;
     metric: string;
-    quarterSprintId: number;
+    objectiveId?: number; // Opzionale - può essere creato indipendentemente
     targetValue: number;
     progressValue: number;
     weight: number;
     unit: string;
     ownerId: number | null;
   }) => Promise<void>;
-  quarterSprints: QuarterSprintOption[];
+  objectives: ObjectiveOption[];
   currentUserId: number | null;
 }
 
@@ -30,7 +29,7 @@ export function CreateKeyResultModal({
   isOpen,
   onClose,
   onSave,
-  quarterSprints,
+  objectives,
   currentUserId,
 }: CreateKeyResultModalProps) {
   const { toast } = useToast();
@@ -38,19 +37,19 @@ export function CreateKeyResultModal({
   const [formData, setFormData] = useState({
     title: "",
     metric: "",
-    quarterSprintId: "",
+    objectiveId: "", // Può essere vuoto - opzionale
     targetValue: "",
     progressValue: "0",
     weight: "1",
     unit: "",
   });
 
-  // Auto-select first quarter sprint when modal opens
+  // Auto-select first objective when modal opens (se disponibile)
   useEffect(() => {
-    if (isOpen && quarterSprints.length > 0 && !formData.quarterSprintId) {
-      setFormData((prev) => ({ ...prev, quarterSprintId: String(quarterSprints[0].id) }));
+    if (isOpen && objectives.length > 0 && !formData.objectiveId) {
+      setFormData((prev) => ({ ...prev, objectiveId: String(objectives[0].id) }));
     }
-  }, [isOpen, quarterSprints, formData.quarterSprintId]);
+  }, [isOpen, objectives, formData.objectiveId]);
 
   const handleSave = async () => {
     // Validation
@@ -62,11 +61,11 @@ export function CreateKeyResultModal({
       toast({ variant: "warning", title: "Metrica richiesta", description: "Inserisci una metrica di misurazione" });
       return;
     }
-    if (!formData.quarterSprintId) {
+    if (!formData.objectiveId || !formData.objectiveId.trim()) {
       toast({
         variant: "warning",
-        title: "Quarter Sprint richiesto",
-        description: "Seleziona un Quarter Sprint per il Key Result",
+        title: "Obiettivo Strategico richiesto",
+        description: "Collega il Key Result a un Obiettivo Strategico per la struttura OKR",
       });
       return;
     }
@@ -94,22 +93,28 @@ export function CreateKeyResultModal({
 
     setSaving(true);
     try {
-      await onSave({
+      const payload: any = {
         title: formData.title,
         metric: formData.metric,
-        quarterSprintId: Number(formData.quarterSprintId),
         targetValue: parsedTarget,
         progressValue: parsedProgress,
         weight: parsedWeight,
         unit: formData.unit || "unit",
         ownerId: currentUserId,
-      });
+      };
 
-      // Reset form
+      // objectiveId è opzionale
+      if (formData.objectiveId) {
+        payload.objectiveId = Number(formData.objectiveId);
+      }
+
+      await onSave(payload);
+
+      // Solo se successo: Reset form e chiudi modal
       setFormData({
         title: "",
         metric: "",
-        quarterSprintId: quarterSprints.length > 0 ? String(quarterSprints[0].id) : "",
+        objectiveId: objectives.length > 0 ? String(objectives[0].id) : "",
         targetValue: "",
         progressValue: "0",
         weight: "1",
@@ -119,6 +124,8 @@ export function CreateKeyResultModal({
       onClose();
     } catch (error) {
       console.error("Error saving key result:", error);
+      // NON chiudere il modal in caso di errore, lascia il form compilato
+      // Il toast di errore è già mostrato dal parent
     } finally {
       setSaving(false);
     }
@@ -129,7 +136,7 @@ export function CreateKeyResultModal({
       setFormData({
         title: "",
         metric: "",
-        quarterSprintId: quarterSprints.length > 0 ? String(quarterSprints[0].id) : "",
+        objectiveId: objectives.length > 0 ? String(objectives[0].id) : "",
         targetValue: "",
         progressValue: "0",
         weight: "1",
@@ -168,26 +175,27 @@ export function CreateKeyResultModal({
 
         <div>
           <label className="mb-2 block text-sm font-medium text-[var(--color-primary)]">
-            Quarter Sprint <span className="text-red-500">*</span>
+            Obiettivo Strategico <span className="text-red-500">*</span>
           </label>
           <Select
-            value={formData.quarterSprintId}
-            onChange={(e) => setFormData({ ...formData, quarterSprintId: e.target.value })}
-            disabled={saving || quarterSprints.length === 0}
+            value={formData.objectiveId}
+            onChange={(e) => setFormData({ ...formData, objectiveId: e.target.value })}
+            disabled={saving || objectives.length === 0}
           >
-            {quarterSprints.length === 0 ? (
-              <option value="">Nessun Quarter Sprint disponibile</option>
-            ) : (
-              quarterSprints.map((qs) => (
-                <option key={qs.id} value={qs.id}>
-                  {qs.name} - {qs.objectiveTitle}
-                </option>
-              ))
-            )}
+            <option value="">-- Seleziona un obiettivo --</option>
+            {objectives.map((objective) => (
+              <option key={objective.id} value={objective.id}>
+                {objective.title}
+              </option>
+            ))}
           </Select>
-          {quarterSprints.length === 0 && (
+          {objectives.length === 0 ? (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+              ⚠️ Devi prima creare un Obiettivo Strategico dalla tab "Obiettivi"
+            </p>
+          ) : (
             <p className="mt-1 text-xs text-[var(--color-neutral-500)]">
-              Crea prima un Quarter Sprint dal tab "Quarter Sprint"
+              Il Key Result sarà collegato a questo Obiettivo Strategico
             </p>
           )}
         </div>
@@ -250,8 +258,7 @@ export function CreateKeyResultModal({
 
         <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/20">
           <p className="text-xs text-blue-800 dark:text-blue-200">
-            💡 <strong>Suggerimento:</strong> Il peso determina l'importanza relativa di questo Key Result rispetto
-            agli altri nel Quarter Sprint. Valori più alti indicano maggiore priorità.
+            💡 <strong>Suggerimento:</strong> Il Key Result deve essere collegato a un Obiettivo Strategico per mantenere la struttura OKR. Il peso determina l'importanza relativa rispetto agli altri Key Results dello stesso obiettivo.
           </p>
         </div>
 

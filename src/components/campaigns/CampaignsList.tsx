@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import {
   Table,
   TableHeader,
@@ -53,20 +54,11 @@ type Campaign = {
     code: string;
     label: string;
   };
-  quarterSprint: {
+  objective: {
     id: number;
-    name: string;
-    code: string | null;
-    shortCode: string | null;
-    quarter: number;
-    objective: {
-      id: number;
-      title: string;
-      description: string | null;
-      status: string;
-    } | null;
-    startDate: string | null;
-    endDate: string | null;
+    title: string;
+    description: string | null;
+    status: string;
   } | null;
   keyResult: {
     id: number;
@@ -87,35 +79,15 @@ type FiscalYearOption = {
   label: string;
 };
 
-type QuarterSprintOption = {
-  id: number;
-  name: string;
-  code: string | null;
-  shortCode: string | null;
-  quarter: number;
-  objective: {
-    id: number;
-    title: string;
-    description: string | null;
-    status: string;
-  } | null;
-  startDate: string | null;
-  endDate: string | null;
-  fiscalYearId: number | null;
-};
-
 type ViewMode = "okr" | "sheet";
 
 type CampaignDraft = {
   goal: string;
   allocated: string;
   spent: string;
-  quarterSprintId: string;
   dirty: boolean;
   saving: boolean;
 };
-
-const UNSASSIGNED_OPTION = "unassigned";
 
 const buildBaseDraft = (campaign: Campaign): CampaignDraft => {
   const allocation = campaign.allocations[0];
@@ -123,7 +95,6 @@ const buildBaseDraft = (campaign: Campaign): CampaignDraft => {
     goal: campaign.goal ?? "",
     allocated: (allocation?.allocated ?? 0).toString(),
     spent: (allocation?.spent ?? 0).toString(),
-    quarterSprintId: campaign.quarterSprint?.id ? campaign.quarterSprint.id.toString() : UNSASSIGNED_OPTION,
     dirty: false,
     saving: false,
   };
@@ -156,7 +127,6 @@ function getCampaignStatusVariant(value: string | null | undefined): Parameters<
 
 // Configurazione colonne per la modalità foglio
 const SHEET_COLUMNS: ColumnConfig[] = [
-  { id: "quarterSprint", label: "Quarter Sprint", defaultVisible: true },
   { id: "campaign", label: "Campagna", defaultVisible: true },
   { id: "owner", label: "Owner", defaultVisible: true },
   { id: "status", label: "Stato", defaultVisible: true },
@@ -194,9 +164,7 @@ export function CampaignsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fiscalYears, setFiscalYears] = useState<FiscalYearOption[]>([]);
-  const [quarterSprints, setQuarterSprints] = useState<QuarterSprintOption[]>([]);
   const [fiscalYearId, setFiscalYearId] = useState<string>("all");
-  const [quarterSprintId, setQuarterSprintId] = useState<string>("all");
   const [filtersLoading, setFiltersLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("sheet");
   const [campaignDrafts, setCampaignDrafts] = useState<Record<number, CampaignDraft>>({});
@@ -228,29 +196,6 @@ export function CampaignsList() {
     }
   }, [toast]);
 
-  const fetchQuarterSprints = useCallback(
-    async (yearId: string) => {
-      try {
-        const params = new URLSearchParams();
-        if (yearId !== "all") {
-          params.set("fiscalYearId", yearId);
-        }
-        const url = params.size > 0 ? `/api/quarter-sprints?${params.toString()}` : "/api/quarter-sprints";
-        const response = await fetch(url, { credentials: "include", cache: "no-store" });
-        if (!response.ok) {
-          throw new Error("Impossibile caricare i quarter sprint");
-        }
-        const payload = await response.json();
-        const data = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
-        setQuarterSprints(data as QuarterSprintOption[]);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Errore nel caricamento dei quarter sprint";
-        toast({ variant: "error", title: "Errore", description: message });
-      }
-    },
-    [toast]
-  );
-
   const fetchCampaigns = useCallback(async () => {
     try {
       setLoading(true);
@@ -258,9 +203,6 @@ export function CampaignsList() {
       const params = new URLSearchParams();
       if (fiscalYearId !== "all") {
         params.set("fiscalYearId", fiscalYearId);
-      }
-      if (quarterSprintId !== "all") {
-        params.set("quarterSprintId", quarterSprintId);
       }
       const url = params.size > 0 ? `/api/campaigns?${params.toString()}` : "/api/campaigns";
       const response = await fetch(url, {
@@ -283,17 +225,12 @@ export function CampaignsList() {
     } finally {
       setLoading(false);
     }
-  }, [fiscalYearId, quarterSprintId, toast]);
+  }, [fiscalYearId, toast]);
 
   useEffect(() => {
     setFiltersLoading(true);
     fetchFiscalYears().finally(() => setFiltersLoading(false));
   }, [fetchFiscalYears]);
-
-  useEffect(() => {
-    fetchQuarterSprints(fiscalYearId);
-    setQuarterSprintId("all");
-  }, [fetchQuarterSprints, fiscalYearId]);
 
   useEffect(() => {
     fetchCampaigns();
@@ -322,14 +259,14 @@ export function CampaignsList() {
       string,
       {
         key: string;
-        quarterSprint: Campaign["quarterSprint"];
+        objective: Campaign["objective"];
         campaigns: Campaign[];
         totals: { allocated: number; spent: number; delta: number };
       }
     >();
 
     campaigns.forEach((campaign) => {
-      const key = campaign.quarterSprint?.id ? `qs-${campaign.quarterSprint.id}` : "unassigned";
+      const key = campaign.objective?.id ? `obj-${campaign.objective.id}` : "unassigned";
       const existing = groups.get(key);
       const allocation = campaign.allocations[0];
       const allocated = allocation?.allocated ?? 0;
@@ -344,7 +281,7 @@ export function CampaignsList() {
       } else {
         groups.set(key, {
           key,
-          quarterSprint: campaign.quarterSprint,
+          objective: campaign.objective,
           campaigns: [campaign],
           totals: { allocated, spent, delta },
         });
@@ -352,13 +289,8 @@ export function CampaignsList() {
     });
 
     const sorted = Array.from(groups.values()).sort((a, b) => {
-      const aStart = a.quarterSprint?.startDate ? new Date(a.quarterSprint.startDate).getTime() : Number.POSITIVE_INFINITY;
-      const bStart = b.quarterSprint?.startDate ? new Date(b.quarterSprint.startDate).getTime() : Number.POSITIVE_INFINITY;
-      if (aStart !== bStart) {
-        return aStart - bStart;
-      }
-      const aName = a.quarterSprint?.name ?? "Senza Quarter Sprint";
-      const bName = b.quarterSprint?.name ?? "Senza Quarter Sprint";
+      const aName = a.objective?.title ?? "Senza Obiettivo";
+      const bName = b.objective?.title ?? "Senza Obiettivo";
       return aName.localeCompare(bName, "it-IT");
     });
 
@@ -392,34 +324,6 @@ export function CampaignsList() {
     [uniqueOwners]
   );
 
-  const sheetQuarterSprintOptions = useMemo(() => {
-    const map = new Map<number, QuarterSprintOption>();
-    quarterSprints.forEach((qs) => map.set(qs.id, qs));
-    campaigns.forEach((campaign) => {
-      if (campaign.quarterSprint) {
-        map.set(campaign.quarterSprint.id, {
-          id: campaign.quarterSprint.id,
-          name: campaign.quarterSprint.name,
-          code: campaign.quarterSprint.code,
-          shortCode: campaign.quarterSprint.shortCode,
-          quarter: campaign.quarterSprint.quarter,
-          objective: campaign.quarterSprint.objective
-            ? {
-                id: campaign.quarterSprint.objective.id,
-                title: campaign.quarterSprint.objective.title,
-                description: campaign.quarterSprint.objective.description,
-                status: campaign.quarterSprint.objective.status,
-              }
-            : null,
-          startDate: campaign.quarterSprint.startDate,
-          endDate: campaign.quarterSprint.endDate,
-          fiscalYearId: campaign.fiscalYear.id,
-        });
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "it-IT"));
-  }, [quarterSprints, campaigns]);
-
   useEffect(() => {
     setExpandedGroups((previous) => {
       const next: Record<string, boolean> = {};
@@ -438,7 +342,7 @@ export function CampaignsList() {
   }, []);
 
   const handleDraftChange = useCallback(
-    (campaignId: number, field: "goal" | "allocated" | "spent" | "quarterSprintId", value: string) => {
+    (campaignId: number, field: "goal" | "allocated" | "spent", value: string) => {
       setCampaignDrafts((prev) => {
         const campaign = campaigns.find((item) => item.id === campaignId);
         if (!campaign) {
@@ -452,8 +356,7 @@ export function CampaignsList() {
         const isDirty =
           base.goal !== updated.goal ||
           base.allocated !== updated.allocated ||
-          base.spent !== updated.spent ||
-          base.quarterSprintId !== updated.quarterSprintId;
+          base.spent !== updated.spent;
 
         updated.dirty = isDirty;
 
@@ -510,7 +413,6 @@ export function CampaignsList() {
       try {
         const payload = {
           goal: draft.goal,
-          quarterSprintId: draft.quarterSprintId === UNSASSIGNED_OPTION ? null : Number(draft.quarterSprintId),
           allocation: {
             allocated,
             spent,
@@ -550,9 +452,6 @@ export function CampaignsList() {
             goal: updatedCampaign.goal ?? "",
             allocated: (updatedCampaign.allocations[0]?.allocated ?? 0).toString(),
             spent: (updatedCampaign.allocations[0]?.spent ?? 0).toString(),
-            quarterSprintId: updatedCampaign.quarterSprint?.id
-              ? updatedCampaign.quarterSprint.id.toString()
-              : UNSASSIGNED_OPTION,
             dirty: false,
             saving: false,
           },
@@ -579,7 +478,6 @@ export function CampaignsList() {
 
   const handleResetFilters = () => {
     setFiscalYearId("all");
-    setQuarterSprintId("all");
   };
 
   const formatDate = (value: string | null) => {
@@ -614,7 +512,6 @@ export function CampaignsList() {
     <div className="space-y-4">
       {groupedCampaigns.map((group) => {
         const isExpanded = expandedGroups[group.key];
-        const range = formatDateRange(group.quarterSprint?.startDate ?? null, group.quarterSprint?.endDate ?? null);
         const deltaColor =
           group.totals.delta > 0
             ? "text-[#1f7b5c]"
@@ -635,22 +532,14 @@ export function CampaignsList() {
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  <Badge variant="info" className="uppercase">Objective</Badge>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
-                    Quarter Sprint
-                  </span>
+                  <Badge variant="info" className="uppercase">Obiettivo</Badge>
                 </div>
                 <div className="text-xl font-semibold text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]">
-                  {group.quarterSprint?.name ?? "Senza Quarter Sprint"}
+                  {group.objective?.title ?? "Senza Obiettivo"}
                 </div>
                 <p className="max-w-2xl text-sm text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
-                  {group.quarterSprint?.objective?.title ?? "Assegna un quarter sprint per definire l'obiettivo strategico."}
+                  {group.objective?.description ?? "Nessuna descrizione disponibile."}
                 </p>
-                {range && (
-                  <span className="text-xs text-[var(--color-neutral-400)] dark:text-[var(--color-tertiary-ice)]/60">
-                    {range}
-                  </span>
-                )}
               </div>
 
               <div className="flex flex-col items-end gap-1 text-right">
@@ -687,7 +576,7 @@ export function CampaignsList() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Campagna</TableHead>
-                        <TableHead>Key Result</TableHead>
+                        <TableHead className="max-w-[260px]">Key Result</TableHead>
                         <TableHead>Canale</TableHead>
                         <TableHead>Owner</TableHead>
                         <TableHead className="text-right">Allocato</TableHead>
@@ -715,8 +604,21 @@ export function CampaignsList() {
                         return (
                           <TableRow key={campaign.id}>
                             <TableCell className="font-medium">{campaign.name}</TableCell>
-                            <TableCell className="max-w-[260px] text-sm text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
-                              {campaign.goal ?? "—"}
+                            <TableCell className="max-w-[260px] align-top">
+                              {campaign.goal && campaign.goal !== "—" ? (
+                                <div className="group relative">
+                                  <div className="cursor-help truncate text-sm text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
+                                    {campaign.goal}
+                                  </div>
+                                  <div className="pointer-events-none absolute bottom-full left-0 z-[9999] mb-2 hidden w-[400px] rounded-lg border border-[var(--color-neutral-200)] bg-[var(--surface)] p-3 text-sm shadow-2xl group-hover:block dark:border-[var(--color-neutral-700)] dark:bg-[var(--surface-muted)]">
+                                    <div className="text-[var(--color-neutral-700)] dark:text-[var(--color-neutral-300)]">
+                                      {campaign.goal}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-sm text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">—</div>
+                              )}
                             </TableCell>
                             <TableCell>{campaign.channel.name}</TableCell>
                             <TableCell>
@@ -788,9 +690,15 @@ export function CampaignsList() {
           />
         </div>
 
-        <div className="w-full rounded-[var(--radius-lg)] border border-[var(--color-neutral-200)] bg-[var(--surface)] shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
+        <div className="w-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-neutral-200)] bg-[var(--surface)] shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
           <div className="w-full overflow-x-auto">
-            <Table resizable minColumnWidth={12} className="min-w-[1200px]" tableId="campaigns-list" userId={session?.user?.id}>
+            <Table
+              resizable
+              minColumnWidth={12}
+              className="min-w-[1200px]"
+              tableId="campaigns-list"
+              userId={session?.user?.id}
+            >
               <TableHeader>
                 <TableRow>
                   {visibleColumnsConfig.map((col) => {
@@ -803,7 +711,7 @@ export function CampaignsList() {
                     return (
                       <TableHead
                         key={col.id}
-                        className={col.id === "quarterSprint" ? "w-[200px]" : isRightAligned ? "text-right" : ""}
+                        className={isRightAligned ? "text-right" : ""}
                       >
                         <div className={cn("flex items-center", isRightAligned && "justify-end", !isRightAligned && "justify-between")}>
                           <span>{col.label}</span>
@@ -912,10 +820,6 @@ export function CampaignsList() {
                   // Determina se questa è la prima campagna di un gruppo (per evidenziare visivamente)
                   const currentGroup = groupedCampaigns.find((g) => g.campaigns.some((c) => c.id === campaign.id));
                   const isFirstInGroup = currentGroup?.campaigns[0]?.id === campaign.id;
-                  const groupRange = formatDateRange(
-                    currentGroup?.quarterSprint?.startDate ?? null,
-                    currentGroup?.quarterSprint?.endDate ?? null
-                  );
 
                   return (
                     <TableRow
@@ -926,39 +830,6 @@ export function CampaignsList() {
                       `}
                     >
                     {visibleColumnsConfig.map((col) => {
-                      if (col.id === "quarterSprint") {
-                        return (
-                          <TableCell key={col.id} className="align-top">
-                            <div className="flex flex-col gap-1">
-                              <Select
-                                value={draft.quarterSprintId}
-                                onChange={(event) => handleDraftChange(campaign.id, "quarterSprintId", event.target.value)}
-                                disabled={isSaving}
-                                className="text-sm"
-                              >
-                                <option value={UNSASSIGNED_OPTION}>Non assegnato</option>
-                                {sheetQuarterSprintOptions.map((qs) => (
-                                  <option key={qs.id} value={qs.id.toString()}>
-                                    {qs.shortCode ?? qs.code ? `${qs.shortCode ?? qs.code} — ${qs.name}` : qs.name}
-                                  </option>
-                                ))}
-                              </Select>
-                              {isFirstInGroup && currentGroup?.quarterSprint && (
-                                <div className="mt-1 flex flex-col gap-0.5">
-                                  <Badge variant="info" className="w-fit text-xs uppercase">
-                                    {currentGroup.quarterSprint.shortCode ?? currentGroup.quarterSprint.code ?? currentGroup.quarterSprint.name}
-                                  </Badge>
-                                  {groupRange && (
-                                    <span className="text-[0.65rem] text-[var(--color-neutral-400)] dark:text-[var(--color-tertiary-ice)]/60">
-                                      {groupRange}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                        );
-                      }
                       if (col.id === "campaign") {
                         return (
                           <TableCell key={col.id} className="align-top">
@@ -1096,103 +967,111 @@ export function CampaignsList() {
   );
   };
 
-  const hasActiveFilters = fiscalYearId !== "all" || quarterSprintId !== "all" || Object.keys(columnFilters).length > 0;
+  const hasActiveFilters = fiscalYearId !== "all" || Object.keys(columnFilters).length > 0;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Select value={fiscalYearId} onChange={(event) => setFiscalYearId(event.target.value)} disabled={filtersDisabled}>
-          <option value="all">Tutti gli anni fiscali</option>
-          {fiscalYears.map((year) => (
-            <option key={year.id} value={year.id.toString()}>
-              {year.label}
-            </option>
-          ))}
-        </Select>
-        <Select value={quarterSprintId} onChange={(event) => setQuarterSprintId(event.target.value)} disabled={filtersDisabled}>
-          <option value="all">Tutti i quarter sprint</option>
-          {quarterSprints.map((qs) => (
-            <option key={qs.id} value={qs.id.toString()}>
-              {qs.shortCode ?? qs.code ? `${qs.shortCode ?? qs.code} — ${qs.name}` : qs.name}
-            </option>
-          ))}
-        </Select>
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              handleResetFilters();
-              setColumnFilters({});
-            }}
-            disabled={filtersDisabled}
-            className="text-xs text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mr-1"
-            >
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            Cancella filtri
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <Link href="/campaigns/new">
+          <Button variant="primary" size="sm" className="text-sm">
+            + Nuova Campagna
           </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setViewMode(viewMode === "okr" ? "sheet" : "okr")}
-          className="text-xs text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"
-        >
-          {viewMode === "okr" ? (
-            <>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mr-1"
+        </Link>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-shrink-0">
+            <label className="mb-2 block text-xs font-medium text-[var(--color-neutral-600)] dark:text-[var(--color-neutral-400)]">
+              Anno Fiscale
+            </label>
+            <Select value={fiscalYearId} onChange={(event) => setFiscalYearId(event.target.value)} disabled={filtersDisabled} className="min-w-[180px]">
+              <option value="all">Tutti gli anni fiscali</option>
+              {fiscalYears.map((year) => (
+                <option key={year.id} value={year.id.toString()}>
+                  {year.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {hasActiveFilters && (
+            <div className="flex items-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  handleResetFilters();
+                  setColumnFilters({});
+                }}
+                disabled={filtersDisabled}
+                className="text-xs text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"
               >
-                <path d="M3 3h18v18H3zM9 9h6v6H9z" />
-                <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
-              </svg>
-              Vista tabella
-            </>
-          ) : (
-            <>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mr-1"
-              >
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                <line x1="12" y1="22.08" x2="12" y2="12" />
-              </svg>
-              Vista OKR
-            </>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mr-1"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Cancella filtri
+              </Button>
+            </div>
           )}
-        </Button>
+          <div className="flex items-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode(viewMode === "okr" ? "sheet" : "okr")}
+              className="text-xs text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"
+            >
+              {viewMode === "okr" ? (
+                <>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="mr-1"
+                  >
+                    <path d="M3 3h18v18H3zM9 9h6v6H9z" />
+                    <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+                  </svg>
+                  Vista tabella
+                </>
+              ) : (
+                <>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="mr-1"
+                  >
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
+                  </svg>
+                  Vista OKR
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {loading && <Skeleton className="h-10" />}

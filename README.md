@@ -16,14 +16,25 @@ npm install
 ```
 
 ### 2. Configurazione ambiente
-Crea un file `.env` nella root del progetto:
+
+Copia il file di esempio e configura le variabili d'ambiente:
+```bash
+cp .env.example .env.local
+```
+
+Genera un `AUTH_SECRET` sicuro:
+```bash
+openssl rand -base64 32
+```
+
+Aggiorna `.env.local` con il secret generato:
 ```env
-AUTH_SECRET=LS56f9Lw2VvC65ju2j68Wr3a523JWGYqZMZ/eVq1+cI=
+AUTH_SECRET=<your-generated-secret>
 DATABASE_URL="file:./prisma/dev.db"
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-**Nota**: Per produzione, genera un `AUTH_SECRET` sicuro usando `openssl rand -base64 32`.
+**⚠️ Importante**: Mai committare file `.env*` o credenziali in chiaro. Vedi `../SECURITY.md` per le best practice.
 
 ### 3. Setup database
 ```bash
@@ -43,14 +54,14 @@ Apri il browser su [http://localhost:3000](http://localhost:3000).
 
 ## Credenziali Demo
 
-### Utente Admin
-- **Email**: `admin@example.com`
-- **Password**: `admin123`
+**📖 Per le credenziali complete e la guida demo**, consulta: [`docs/DEMO.md`](docs/DEMO.md)
 
-### Utenti Demo (tutti con password: `demo123`)
-- **Elena Ferri** (Digital Specialist): `elena.ferri@digimax.mock`
-- **Marco Neri** (Engagement Specialist): `marco.neri@digimax.mock`
-- **Chiara Bianchi** (Marketing Manager): `chiara.bianchi@digimax.mock`
+Credenziali di accesso rapido:
+- **Admin**: `admin@example.com` / `admin123`
+- **Requester**: `requester@digimax.mock` / `demo123`
+- **Altri utenti demo**: vedi `docs/DEMO.md`
+
+**⚠️ Nota**: Queste credenziali sono solo per sviluppo locale. Non utilizzarle mai in produzione.
 
 ## Funzionalità Dashboard
 

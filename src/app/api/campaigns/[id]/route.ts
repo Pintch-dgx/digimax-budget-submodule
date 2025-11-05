@@ -3,7 +3,7 @@ import { getSession } from "@/lib/get-session";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const session = await getSession();
 
@@ -11,7 +11,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Unauthorized - No session" }, { status: 401 });
     }
 
-    const campaignId = Number(params.id);
+    // Handle params as Promise (Next.js 15+) or direct object
+    const resolvedParams = params instanceof Promise ? await params : params;
+    const campaignId = Number(resolvedParams.id);
     if (!campaignId || Number.isNaN(campaignId)) {
       return NextResponse.json({ error: "Campaign id non valido" }, { status: 400 });
     }
@@ -26,100 +28,72 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const body = await request.json();
-    const { goal, quarterSprintId, keyResultId, allocation } = body ?? {};
+    const { goal, objectiveId, allocatedBudget, spentBudget } = body ?? {};
 
-    const normalizedQuarterSprintId =
-      quarterSprintId === undefined || quarterSprintId === null
-        ? quarterSprintId
-        : Number(quarterSprintId);
+    const campaignUpdateData: Prisma.CampaignUpdateInput = {};
 
-    if (
-      normalizedQuarterSprintId !== undefined &&
-      normalizedQuarterSprintId !== null &&
-      Number.isNaN(normalizedQuarterSprintId)
-    ) {
-      return NextResponse.json({ error: "Quarter sprint non valido" }, { status: 400 });
+    if (goal !== undefined) {
+      campaignUpdateData.goal = typeof goal === "string" ? goal : String(goal ?? "");
     }
 
-    const allocationUpdate: { allocated?: number; spent?: number } = {};
-    if (allocation) {
-      if (allocation.allocated !== undefined) {
-        const allocated = Number(allocation.allocated);
-        if (!Number.isFinite(allocated) || allocated < 0) {
-          return NextResponse.json({ error: "Valore 'allocated' non valido" }, { status: 400 });
+    if (objectiveId !== undefined) {
+      if (objectiveId === null || objectiveId === "") {
+        (campaignUpdateData as any).objective = { disconnect: true };
+      } else {
+        const parsedObjective = Number(objectiveId);
+        if (!Number.isFinite(parsedObjective)) {
+          return NextResponse.json({ error: "Objective non valido" }, { status: 400 });
         }
-        allocationUpdate.allocated = Math.round(allocated);
-      }
-      if (allocation.spent !== undefined) {
-        const spent = Number(allocation.spent);
-        if (!Number.isFinite(spent) || spent < 0) {
-          return NextResponse.json({ error: "Valore 'spent' non valido" }, { status: 400 });
-        }
-        allocationUpdate.spent = Math.round(spent);
+        (campaignUpdateData as any).objective = { connect: { id: parsedObjective } };
       }
     }
 
-    await prisma.$transaction(async (tx) => {
-      const campaignUpdateData: Prisma.CampaignUpdateInput = {};
-
-      if (goal !== undefined) {
-        campaignUpdateData.goal = typeof goal === "string" ? goal : String(goal ?? "");
+    // Gestione allocatedBudget - normalmente valorizzato da approvazione budget request
+    if (allocatedBudget !== undefined && allocatedBudget !== null) {
+      const parsed = Number(allocatedBudget);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return NextResponse.json({ error: "Budget allocato non valido" }, { status: 400 });
       }
+      campaignUpdateData.allocatedBudget = parsed;
+    }
 
-      if (normalizedQuarterSprintId !== undefined) {
-        if (normalizedQuarterSprintId === null) {
-          (campaignUpdateData as any).quarterSprint = { disconnect: true };
-        } else {
-          (campaignUpdateData as any).quarterSprint = { connect: { id: normalizedQuarterSprintId } };
-        }
+    // Gestione spentBudget - può essere inserito manualmente
+    if (spentBudget !== undefined && spentBudget !== null) {
+      const parsed = Number(spentBudget);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return NextResponse.json({ error: "Budget speso non valido" }, { status: 400 });
       }
+      campaignUpdateData.spentBudget = parsed;
+    }
 
-      if (keyResultId !== undefined) {
-        if (keyResultId === null || keyResultId === "") {
-          (campaignUpdateData as any).keyResult = { disconnect: true };
-        } else {
-          const parsedKeyResult = Number(keyResultId);
-          if (!Number.isFinite(parsedKeyResult)) {
-            throw new Error("Key Result non valido");
-          }
-          (campaignUpdateData as any).keyResult = { connect: { id: parsedKeyResult } };
-        }
-      }
-
-      if (Object.keys(campaignUpdateData).length > 0) {
-        await (tx as any).campaign.update({
-          where: { id: campaignId },
-          data: campaignUpdateData,
-        });
-      }
-
-      if (Object.keys(allocationUpdate).length > 0) {
-        const existingAllocation = await tx.budgetAllocation.findFirst({
-          where: { campaignId },
-          orderBy: { createdAt: "asc" },
-        });
-
-        if (existingAllocation) {
-          await tx.budgetAllocation.update({
-            where: { id: existingAllocation.id },
-            data: allocationUpdate,
-          });
-        } else {
-          await tx.budgetAllocation.create({
-            data: {
-              campaignId,
-              fiscalYearId: campaign.fiscalYearId,
-              allocated: allocationUpdate.allocated ?? 0,
-              spent: allocationUpdate.spent ?? 0,
-            },
-          });
-        }
-      }
-    });
+    if (Object.keys(campaignUpdateData).length > 0) {
+      await (prisma as any).campaign.update({
+        where: { id: campaignId },
+        data: campaignUpdateData,
+      });
+    }
 
       const updatedCampaign = await (prisma as any).campaign.findUnique({
       where: { id: campaignId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        code: true,
+        shortCode: true,
+        startDate: true,
+        endDate: true,
+        quarter: true,
+        fiscalYearId: true,
+        channelId: true,
+        ownerId: true,
+        objectiveId: true,
+        status: true,
+        goal: true,
+        allocatedBudget: true,
+        spentBudget: true,
+        createdAt: true,
+        updatedAt: true,
         channel: {
           select: {
             id: true,
@@ -152,27 +126,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
             label: true,
           },
         },
-        quarterSprint: {
-          include: {
-            objective: {
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                status: true,
-              },
-            },
-          },
-        },
-        keyResult: {
+        objective: {
           select: {
             id: true,
             title: true,
-            metric: true,
-            targetValue: true,
-            progressValue: true,
+            description: true,
             status: true,
-            weight: true,
           },
         },
       },

@@ -13,30 +13,16 @@ const objectiveSelect = {
   fiscalYearId: true,
   ownerId: true,
   createdAt: true,
-  quarterSprints: {
+  keyResults: {
     select: {
       id: true,
-      name: true,
-      code: true,
-      shortCode: true,
-      quarter: true,
-      objectiveSummary: true,
-      startDate: true,
-      endDate: true,
-      fiscalYearId: true,
+      title: true,
+      metric: true,
+      targetValue: true,
+      progressValue: true,
+      unit: true,
+      weight: true,
       objectiveId: true,
-      keyResults: {
-        select: {
-          id: true,
-          title: true,
-          metric: true,
-          targetValue: true,
-          progressValue: true,
-          unit: true,
-          weight: true,
-          quarterSprintId: true,
-        },
-      },
     },
   },
   owner: {
@@ -44,6 +30,13 @@ const objectiveSelect = {
       id: true,
       fullName: true,
       email: true,
+    },
+  },
+  fiscalYear: {
+    select: {
+      id: true,
+      code: true,
+      label: true,
     },
   },
 } as const;
@@ -56,9 +49,9 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Prova query semplificata senza select
     const objectives = await (prisma as any).objective.findMany({
       orderBy: [{ createdAt: "desc" }],
+      select: objectiveSelect, // Include keyResults and other relations
     });
 
     console.log(`[OKR] Found ${objectives.length} objectives`);
@@ -116,7 +109,17 @@ export async function POST(request: NextRequest) {
     if (ownerId) {
       const parsedOwnerId = Number(ownerId);
       if (Number.isFinite(parsedOwnerId)) {
-        createData.owner = { connect: { id: parsedOwnerId } };
+        // Verifica che l'utente esista prima di collegarlo
+        const ownerExists = await prisma.marketingUser.findUnique({
+          where: { id: parsedOwnerId },
+          select: { id: true },
+        });
+        
+        if (ownerExists) {
+          createData.owner = { connect: { id: parsedOwnerId } };
+        } else {
+          console.warn(`Owner ID ${parsedOwnerId} not found, creating objective without owner`);
+        }
       }
     }
 

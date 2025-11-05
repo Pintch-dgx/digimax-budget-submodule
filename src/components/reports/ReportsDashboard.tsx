@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Badge,
   type BadgeProps,
@@ -69,14 +70,14 @@ type CampaignPerformance = {
     remaining: number;
     status: string;
     goal: string | null;
-    quarterSprint: {
-      name: string;
-      code: string | null;
-      shortCode: string | null;
-      objective: string;
-      startDate: string | null;
-      endDate: string | null;
+    objective: {
+      id: number;
+      title: string;
+      description: string | null;
+      status: string;
     } | null;
+    startDate: string | null;
+    endDate: string | null;
   }>;
 };
 
@@ -160,6 +161,12 @@ export function ReportsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const filtersButtonRef = useRef<HTMLDivElement>(null);
+  const actionsButtonRef = useRef<HTMLDivElement>(null);
+  const [filtersPosition, setFiltersPosition] = useState<{ top: number; left: number } | null>(null);
+  const [actionsPosition, setActionsPosition] = useState<{ top: number; left: number } | null>(null);
 
   const fetchFiscalYears = useCallback(async () => {
     try {
@@ -218,6 +225,79 @@ export function ReportsDashboard() {
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
+
+  useEffect(() => {
+    if (!filtersOpen) {
+      setFiltersPosition(null);
+      return;
+    }
+
+    const updateFiltersPosition = () => {
+      if (filtersButtonRef.current) {
+        const rect = filtersButtonRef.current.getBoundingClientRect();
+        const width = 288; // w-72
+        const margin = 16;
+        let left = rect.right - width;
+        left = Math.min(left, window.innerWidth - width - margin);
+        left = Math.max(margin, left);
+        setFiltersPosition({ top: rect.bottom + 8, left });
+      }
+    };
+
+    updateFiltersPosition();
+    window.addEventListener("resize", updateFiltersPosition);
+    window.addEventListener("scroll", updateFiltersPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateFiltersPosition);
+      window.removeEventListener("scroll", updateFiltersPosition, true);
+    };
+  }, [filtersOpen]);
+
+  useEffect(() => {
+    if (!actionsOpen) {
+      setActionsPosition(null);
+      return;
+    }
+
+    const updateActionsPosition = () => {
+      if (actionsButtonRef.current) {
+        const rect = actionsButtonRef.current.getBoundingClientRect();
+        const width = 256; // w-64
+        const margin = 16;
+        let left = rect.right - width;
+        left = Math.min(left, window.innerWidth - width - margin);
+        left = Math.max(margin, left);
+        setActionsPosition({ top: rect.bottom + 8, left });
+      }
+    };
+
+    updateActionsPosition();
+    window.addEventListener("resize", updateActionsPosition);
+    window.addEventListener("scroll", updateActionsPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateActionsPosition);
+      window.removeEventListener("scroll", updateActionsPosition, true);
+    };
+  }, [actionsOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const isFilterTrigger = filtersButtonRef.current?.contains(target);
+      const isActionTrigger = actionsButtonRef.current?.contains(target);
+      const isDropdownContent = target.closest('[data-reports-dropdown]');
+
+      if (!isFilterTrigger && !isActionTrigger && !isDropdownContent) {
+        setFiltersOpen(false);
+        setActionsOpen(false);
+      }
+    };
+
+    if (filtersOpen || actionsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [filtersOpen, actionsOpen]);
 
   const approvalRateBadgeVariant = useMemo(() => {
     if (!data) {
@@ -305,67 +385,168 @@ export function ReportsDashboard() {
           <CardDescription>Analizza l&apos;andamento delle richieste budget, dei richiedenti e delle campagne.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Select
-              value={fiscalYearId}
-              onChange={(event) => setFiscalYearId(event.target.value)}
-            >
-              <option value="all">Tutti gli anni fiscali</option>
-              {fiscalYears.map((fy) => (
-                <option key={fy.id} value={fy.id.toString()}>
-                  {fy.code} — {fy.label}
-                </option>
-              ))}
-            </Select>
-            <Input
-              type="date"
-              value={startDate}
-              max={endDate || undefined}
-              onChange={(event) => setStartDate(event.target.value)}
-            />
-            <Input
-              type="date"
-              value={endDate}
-              min={startDate || undefined}
-              onChange={(event) => setEndDate(event.target.value)}
-            />
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="outline" onClick={() => { setStartDate(""); setEndDate(""); setFiscalYearId("all"); }}>
-                Reimposta filtri
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Data Inizio */}
+            <div className="flex-1 min-w-[140px]">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-neutral-600)] dark:text-[var(--color-neutral-400)]">
+                Data Inizio
+              </label>
+              <Input
+                type="date"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
+            </div>
+
+            {/* Data Fine */}
+            <div className="flex-1 min-w-[140px]">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-neutral-600)] dark:text-[var(--color-neutral-400)]">
+                Data Fine
+              </label>
+              <Input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(event) => setEndDate(event.target.value)}
+              />
+            </div>
+
+            {/* Spacer per spingere i dropdown a destra */}
+            <div className="flex-grow"></div>
+
+            {/* Dropdown Filtri */}
+            <div className="relative" data-dropdown-container ref={filtersButtonRef}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFiltersOpen(!filtersOpen);
+                  setActionsOpen(false);
+                }}
+                className="flex items-center gap-2"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                Filtri
               </Button>
-              <Button variant="primary" onClick={() => fetchReports()} disabled={loading}>
-                Aggiorna
+            </div>
+
+            {/* Dropdown Azioni */}
+            <div className="relative" data-dropdown-container ref={actionsButtonRef}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setActionsOpen(!actionsOpen);
+                  setFiltersOpen(false);
+                }}
+                className="flex items-center gap-2"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                </svg>
+                Azioni
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport("status")}
-              disabled={exporting !== null}
-            >
-              Esporta stati
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport("requesters")}
-              disabled={exporting !== null}
-            >
-              Esporta richiedenti
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport("campaigns")}
-              disabled={exporting !== null}
-            >
-              Esporta campagne
-            </Button>
-          </div>
         </CardContent>
       </Card>
+
+      {typeof window !== "undefined" && filtersOpen && filtersPosition &&
+        createPortal(
+          <div
+            data-reports-dropdown
+            className="fixed z-[9999] w-72 rounded-lg border border-[var(--color-neutral-200)] bg-[var(--surface)] p-4 shadow-2xl dark:border-[var(--color-neutral-700)] dark:bg-[var(--surface-muted)]"
+            style={{ top: filtersPosition.top, left: filtersPosition.left }}
+          >
+            <div className="space-y-3">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--color-neutral-600)] dark:text-[var(--color-neutral-400)]">
+                  Anno Fiscale
+                </label>
+                <Select
+                  value={fiscalYearId}
+                  onChange={(event) => setFiscalYearId(event.target.value)}
+                >
+                  <option value="all">Tutti gli anni fiscali</option>
+                  {fiscalYears.map((fy) => (
+                    <option key={fy.id} value={fy.id.toString()}>
+                      {fy.code} — {fy.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {typeof window !== "undefined" && actionsOpen && actionsPosition &&
+        createPortal(
+          <div
+            data-reports-dropdown
+            className="fixed z-[9999] w-64 rounded-lg border border-[var(--color-neutral-200)] bg-[var(--surface)] p-2 shadow-2xl dark:border-[var(--color-neutral-700)] dark:bg-[var(--surface-muted)]"
+            style={{ top: actionsPosition.top, left: actionsPosition.left }}
+          >
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                  setFiscalYearId("all");
+                  setActionsOpen(false);
+                }}
+                className="w-full rounded px-3 py-2 text-left text-sm hover:bg-[var(--color-neutral-100)] dark:hover:bg-[var(--color-neutral-800)]"
+              >
+                Reimposta filtri
+              </button>
+              <button
+                onClick={() => {
+                  fetchReports();
+                  setActionsOpen(false);
+                }}
+                disabled={loading}
+                className="w-full rounded px-3 py-2 text-left text-sm hover:bg-[var(--color-neutral-100)] disabled:opacity-50 dark:hover:bg-[var(--color-neutral-800)]"
+              >
+                Aggiorna
+              </button>
+              <hr className="my-1 border-[var(--color-neutral-200)] dark:border-[var(--color-neutral-700)]" />
+              <button
+                onClick={() => {
+                  handleExport("status");
+                  setActionsOpen(false);
+                }}
+                disabled={exporting !== null}
+                className="w-full rounded px-3 py-2 text-left text-sm hover:bg-[var(--color-neutral-100)] disabled:opacity-50 dark:hover:bg-[var(--color-neutral-800)]"
+              >
+                Esporta stati
+              </button>
+              <button
+                onClick={() => {
+                  handleExport("requesters");
+                  setActionsOpen(false);
+                }}
+                disabled={exporting !== null}
+                className="w-full rounded px-3 py-2 text-left text-sm hover:bg-[var(--color-neutral-100)] disabled:opacity-50 dark:hover:bg-[var(--color-neutral-800)]"
+              >
+                Esporta richiedenti
+              </button>
+              <button
+                onClick={() => {
+                  handleExport("campaigns");
+                  setActionsOpen(false);
+                }}
+                disabled={exporting !== null}
+                className="w-full rounded px-3 py-2 text-left text-sm hover:bg-[var(--color-neutral-100)] disabled:opacity-50 dark:hover:bg-[var(--color-neutral-800)]"
+              >
+                Esporta campagne
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {error && (
         <div className="rounded-[var(--radius-md)] bg-[#fbe2e0] p-4 text-sm text-[#b93c35] shadow-[var(--shadow-sm)] dark:bg-[#3b1414] dark:text-[#ffb3ac]">
@@ -409,11 +590,11 @@ export function ReportsDashboard() {
               </CardHeader>
             </Card>
             <Card>
-              <CardHeader className="space-y-2 p-3 sm:space-y-3 sm:p-4 lg:p-6">
+              <CardHeader className="p-3 sm:p-4 lg:p-6">
                 <CardDescription className="text-xs sm:text-sm">Tasso approvazione</CardDescription>
-                <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+                <div className="flex flex-col gap-2">
                   <CardTitle className="text-xl font-semibold sm:text-2xl lg:text-3xl">{formatPercentage(data.summary.approvalRate)}</CardTitle>
-                  <Badge variant={approvalRateBadgeVariant} className="text-[0.6rem] uppercase tracking-wide sm:text-xs">
+                  <Badge variant={approvalRateBadgeVariant} className="w-fit text-[0.6rem] uppercase tracking-wide sm:text-xs">
                     {approvalRateBadgeVariant === "success"
                       ? "Solido"
                       : approvalRateBadgeVariant === "warning"
@@ -488,8 +669,8 @@ export function ReportsDashboard() {
                             {group.campaigns.map((campaign) => {
                               const progress = campaign.allocated > 0 ? Math.round((campaign.spent / campaign.allocated) * 100) : null;
                               const progressBar = progress !== null ? Math.min(progress, 100) : 0;
-                              const range = campaign.quarterSprint
-                                ? formatDateRange(campaign.quarterSprint.startDate, campaign.quarterSprint.endDate)
+                              const range = (campaign.startDate && campaign.endDate)
+                                ? formatDateRange(campaign.startDate, campaign.endDate)
                                 : null;
                               return (
                                 <div key={campaign.campaignId} className="space-y-2 rounded-[var(--radius-md)] border border-[var(--color-neutral-200)] bg-[var(--color-neutral-100)]/60 p-3 dark:border-[var(--color-neutral-100)]/60 dark:bg-[var(--surface)]/40">
@@ -502,26 +683,26 @@ export function ReportsDashboard() {
                                     </div>
                                     <Badge variant={group.variant}>{group.label}</Badge>
                                   </div>
-                                  {campaign.quarterSprint ? (
+                                  {campaign.objective ? (
                                     <div className="space-y-1 text-xs text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
                                       <div className="flex items-center gap-2">
-                                        <Badge variant="info" className="uppercase">Objective</Badge>
+                                        <Badge variant="info" className="uppercase">Obiettivo</Badge>
                                         <span className="font-semibold text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]">
-                                          {(campaign.quarterSprint.shortCode ?? campaign.quarterSprint.code)
-                                            ? `${campaign.quarterSprint.shortCode ?? campaign.quarterSprint.code} · ${campaign.quarterSprint.name}`
-                                            : campaign.quarterSprint.name}
+                                          {campaign.objective.title}
                                         </span>
                                       </div>
-                                      <p className="max-w-xl text-xs text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
-                                        {campaign.quarterSprint.objective?.title ?? "Nessun obiettivo associato"}
-                                      </p>
+                                      {campaign.objective.description && (
+                                        <p className="max-w-xl text-xs text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
+                                          {campaign.objective.description}
+                                        </p>
+                                      )}
                                       {range && (
                                         <span className="text-[var(--color-neutral-400)] dark:text-[var(--color-tertiary-ice)]/60">{range}</span>
                                       )}
                                     </div>
                                   ) : (
                                     <span className="text-xs text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
-                                      Nessun quarter sprint assegnato
+                                      Nessun obiettivo assegnato
                                     </span>
                                   )}
                                   <div className="flex flex-wrap items-baseline gap-4 text-sm">

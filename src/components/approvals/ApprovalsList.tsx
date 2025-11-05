@@ -72,9 +72,9 @@ function getLinkStatusBadge(linkStatus: BudgetRequestLinkStatus) {
     BudgetRequestLinkStatus,
     { label: string; variant: Parameters<typeof Badge>[0]["variant"] }
   > = {
-    [BudgetRequestLinkStatus.UNDEFINED_OBJECTIVE]: { label: "No OKR", variant: "secondary" },
-    [BudgetRequestLinkStatus.ASSIGNMENT_PENDING]: { label: "Da asseg.", variant: "warning" },
-    [BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN]: { label: "Collega", variant: "success" },
+    [BudgetRequestLinkStatus.UNDEFINED_OBJECTIVE]: { label: "No OKR", variant: "info" as const },
+    [BudgetRequestLinkStatus.ASSIGNMENT_PENDING]: { label: "Da assegnare", variant: "warning" },
+    [BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN]: { label: "Collegata", variant: "success" },
   };
 
   return map[linkStatus] ?? { label: linkStatus, variant: "default" };

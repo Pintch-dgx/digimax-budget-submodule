@@ -9,30 +9,23 @@ type ParsedFilters = {
   endDate?: Date;
 };
 
-type AllocationWithCampaign = {
-  campaignId: number;
-  allocated: number;
-  spent: number;
-  campaign: {
-    name: string;
+type CampaignWithBudget = {
+  id: number;
+  name: string;
+  status: string;
+  goal: string | null;
+  allocatedBudget: number;
+  spentBudget: number;
+  channel: { name: string };
+  owner: { fullName: string };
+  objective: {
+    id: number;
+    title: string;
+    description: string | null;
     status: string;
-    goal: string | null;
-    channel: { name: string };
-    owner: { fullName: string };
-    quarterSprint: {
-      name: string;
-      code: string | null;
-      shortCode: string | null;
-      objective: {
-        id: number;
-        title: string;
-        description: string | null;
-        status: string;
-      } | null;
-      startDate: Date | null;
-      endDate: Date | null;
-    } | null;
-  };
+  } | null;
+  startDate: Date | null;
+  endDate: Date | null;
 };
 
 function parseFilters(searchParams: URLSearchParams): ParsedFilters {
@@ -86,8 +79,8 @@ function buildRequestWhere(filters: ParsedFilters): Prisma.BudgetRequestWhereInp
   return where;
 }
 
-function buildAllocationWhere(filters: ParsedFilters): Prisma.BudgetAllocationWhereInput {
-  const where: Prisma.BudgetAllocationWhereInput = {};
+function buildCampaignWhere(filters: ParsedFilters): Prisma.CampaignWhereInput {
+  const where: Prisma.CampaignWhereInput = {};
 
   if (filters.fiscalYearId) {
     where.fiscalYearId = filters.fiscalYearId;
@@ -108,9 +101,9 @@ function buildAllocationWhere(filters: ParsedFilters): Prisma.BudgetAllocationWh
 
 async function buildOverviewData(filters: ParsedFilters) {
   const requestWhere = buildRequestWhere(filters);
-  const allocationWhere = buildAllocationWhere(filters);
+  const campaignWhere = buildCampaignWhere(filters);
 
-  const [requestSummary, requestsByStatus, topRequesterGroups, allocationSummary, topAllocations] = await Promise.all([
+  const [requestSummary, requestsByStatus, topRequesterGroups, campaignSummary, topCampaigns] = await Promise.all([
     prisma.budgetRequest.aggregate({
       where: requestWhere,
       _sum: { amount: true },
@@ -130,36 +123,28 @@ async function buildOverviewData(filters: ParsedFilters) {
       orderBy: { _sum: { amount: "desc" } },
       take: 5,
     }),
-    prisma.budgetAllocation.aggregate({
-      where: allocationWhere,
-      _sum: { allocated: true, spent: true },
+    prisma.campaign.aggregate({
+      where: campaignWhere,
+      _sum: { allocatedBudget: true, spentBudget: true },
       _count: { _all: true },
     }),
-    prisma.budgetAllocation.findMany({
-      where: allocationWhere,
+    prisma.campaign.findMany({
+      where: campaignWhere,
       include: {
-        campaign: {
-          include: {
-            channel: { select: { name: true } },
-            owner: { select: { fullName: true } },
-            quarterSprint: {
-              include: {
-                objective: {
-                  select: {
-                    id: true,
-                    title: true,
-                    description: true,
-                    status: true,
-                  },
-                },
-              },
-            },
+        channel: { select: { name: true } },
+        owner: { select: { fullName: true } },
+        objective: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
           },
         },
-      } as any,
-      orderBy: [{ spent: "desc" }],
+      },
+      orderBy: [{ spentBudget: "desc" }],
       take: 5,
-    }) as unknown as Promise<AllocationWithCampaign[]>,
+    }) as unknown as Promise<CampaignWithBudget[]>,
   ]);
 
   const topRequesterIds = topRequesterGroups.map((group) => group.requesterId);
@@ -175,11 +160,12 @@ async function buildOverviewData(filters: ParsedFilters) {
   const totalAmountRequested = requestSummary._sum.amount ?? 0;
 
   const approvedStatus = requestsByStatus.find((entry) => entry.status === BudgetRequestStatus.APPROVED);
+  const approvedWithChangesStatus = requestsByStatus.find((entry) => entry.status === BudgetRequestStatus.APPROVED_WITH_CHANGES);
   const rejectedStatus = requestsByStatus.find((entry) => entry.status === BudgetRequestStatus.REJECTED);
   const pendingStatus = requestsByStatus.find((entry) => entry.status === BudgetRequestStatus.PENDING_APPROVAL);
 
-  const approvedCount = approvedStatus?._count._all ?? 0;
-  const approvedAmount = approvedStatus?._sum.amount ?? 0;
+  const approvedCount = (approvedStatus?._count._all ?? 0) + (approvedWithChangesStatus?._count._all ?? 0);
+  const approvedAmount = (approvedStatus?._sum.amount ?? 0) + (approvedWithChangesStatus?._sum.amount ?? 0);
   const rejectedCount = rejectedStatus?._count._all ?? 0;
   const pendingCount = pendingStatus?._count._all ?? 0;
 
@@ -206,40 +192,32 @@ async function buildOverviewData(filters: ParsedFilters) {
     })
     .sort((a, b) => b.totalAmount - a.totalAmount);
 
-  const allocationData = allocationSummary._sum;
-  const totalAllocated = allocationData?.allocated ?? 0;
-  const totalSpent = allocationData?.spent ?? 0;
+  const campaignData = campaignSummary._sum;
+  const totalAllocated = campaignData?.allocatedBudget ?? 0;
+  const totalSpent = campaignData?.spentBudget ?? 0;
   const totalRemaining = totalAllocated - totalSpent;
 
-  const campaignPerformance = topAllocations.map((allocation) => {
-    const quarter = allocation.campaign.quarterSprint as (typeof allocation.campaign.quarterSprint & { shortCode?: string | null }) | null;
+  const campaignPerformance = topCampaigns.map((campaign) => {
     return {
-      campaignId: allocation.campaignId,
-      campaignName: allocation.campaign.name,
-      channel: allocation.campaign.channel.name,
-      owner: allocation.campaign.owner.fullName,
-      allocated: allocation.allocated,
-      spent: allocation.spent,
-      remaining: allocation.allocated - allocation.spent,
-      status: allocation.campaign.status,
-      goal: allocation.campaign.goal ?? null,
-      quarterSprint: quarter
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      channel: campaign.channel.name,
+      owner: campaign.owner.fullName,
+      allocated: campaign.allocatedBudget,
+      spent: campaign.spentBudget,
+      remaining: campaign.allocatedBudget - campaign.spentBudget,
+      status: campaign.status,
+      goal: campaign.goal ?? null,
+      objective: campaign.objective
         ? {
-            name: quarter.name,
-            code: quarter.code,
-            shortCode: quarter.shortCode ?? null,
-            objective: quarter.objective
-              ? {
-                  id: quarter.objective.id,
-                  title: quarter.objective.title,
-                  description: quarter.objective.description,
-                  status: quarter.objective.status,
-                }
-              : null,
-            startDate: quarter.startDate ? quarter.startDate.toISOString() : null,
-            endDate: quarter.endDate ? quarter.endDate.toISOString() : null,
+            id: campaign.objective.id,
+            title: campaign.objective.title,
+            description: campaign.objective.description,
+            status: campaign.objective.status,
           }
         : null,
+      startDate: campaign.startDate ? campaign.startDate.toISOString() : null,
+      endDate: campaign.endDate ? campaign.endDate.toISOString() : null,
     };
   });
 

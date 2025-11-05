@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       progressValue,
       unit,
       weight,
-      quarterSprintId,
+      campaignId,
       ownerId,
       status,
     } = body ?? {};
@@ -65,15 +65,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       data.weight = parsedWeight;
     }
 
-    if (quarterSprintId !== undefined) {
-      if (quarterSprintId === null || quarterSprintId === "") {
-        return NextResponse.json({ error: "Quarter sprint è obbligatorio" }, { status: 400 });
+    if (campaignId !== undefined) {
+      if (campaignId === null || campaignId === "") {
+        return NextResponse.json({ error: "Campaign è obbligatoria" }, { status: 400 });
       } else {
-        const parsedQuarter = Number(quarterSprintId);
-        if (!Number.isFinite(parsedQuarter)) {
-          return NextResponse.json({ error: "Quarter sprint non valido" }, { status: 400 });
+        const parsedCampaign = Number(campaignId);
+        if (!Number.isFinite(parsedCampaign)) {
+          return NextResponse.json({ error: "Campaign non valida" }, { status: 400 });
         }
-        data.quarterSprint = { connect: { id: parsedQuarter } };
+        data.campaign = { connect: { id: parsedCampaign } };
       }
     }
 
@@ -101,7 +101,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         unit: true,
         weight: true,
         status: true,
-        quarterSprintId: true,
+        campaignId: true,
         ownerId: true,
       },
     });

@@ -52,14 +52,21 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      const searchConditions: Prisma.BudgetRequestWhereInput[] = [
-        { title: { contains: search, mode: "insensitive" } },
-        { notes: { contains: search, mode: "insensitive" } },
-        { requester: { fullName: { contains: search, mode: "insensitive" } } },
-        { requester: { email: { contains: search, mode: "insensitive" } } },
-        { fiscalYear: { code: { contains: search, mode: "insensitive" } } },
-      ];
-      where.OR = searchConditions;
+      const trimmedSearch = search.trim();
+      if (trimmedSearch) {
+        // SQLite doesn't support mode: "insensitive" natively in Prisma
+        // Use case-sensitive search which works for both SQLite and PostgreSQL
+        // For PostgreSQL, we could use mode: "insensitive" but it requires type casting
+        // For simplicity and compatibility, we use case-sensitive search
+        const searchConditions: Prisma.BudgetRequestWhereInput[] = [
+          { title: { contains: trimmedSearch } },
+          { notes: { contains: trimmedSearch } },
+          { requester: { fullName: { contains: trimmedSearch } } },
+          { requester: { email: { contains: trimmedSearch } } },
+          { fiscalYear: { code: { contains: trimmedSearch } } },
+        ];
+        where.OR = searchConditions;
+      }
     }
 
     const dueDateFilter: Prisma.DateTimeFilter = {};
@@ -89,43 +96,68 @@ export async function GET(request: NextRequest) {
       : await prisma.marketingUser.findUnique({
           where: { id: currentUserId },
           include: { role: true },
-        });
+        }).catch(() => null);
 
     const canDelete = (currentUser?.role?.key ?? "").toLowerCase() === "admin";
 
-    const [total, requests] = await Promise.all([
-      prisma.budgetRequest.count({ where }),
-      prisma.budgetRequest.findMany({
-        where,
-        include: {
-          requester: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
+    // Execute queries with error handling
+    let total = 0;
+    let requests: Array<{
+      id: number;
+      title: string;
+      amount: number;
+      dueDate: Date;
+      status: BudgetRequestStatus;
+      linkStatus: BudgetRequestLinkStatus;
+      notes: string | null;
+      requester: { id: number; fullName: string; email: string };
+      fiscalYear: { id: number; code: string; label: string };
+      campaign: { id: number; name: string } | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }> = [];
+
+    try {
+      [total, requests] = await Promise.all([
+        prisma.budgetRequest.count({ where }),
+        prisma.budgetRequest.findMany({
+          where,
+          include: {
+            requester: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+            fiscalYear: {
+              select: {
+                id: true,
+                code: true,
+                label: true,
+              },
+            },
+            campaign: {
+              select: {
+                id: true,
+                name: true,
+              },
             },
           },
-          fiscalYear: {
-            select: {
-              id: true,
-              code: true,
-              label: true,
-            },
+          orderBy: {
+            createdAt: "desc",
           },
-          campaign: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-        skip,
-        take: pageSize,
-      }),
-    ]);
+          skip,
+          take: pageSize,
+        }),
+      ]);
+    } catch (queryError) {
+      console.error("Prisma query error:", queryError);
+      // If query fails, return empty results instead of error
+      // This allows the UI to show "No results" instead of error state
+      total = 0;
+      requests = [];
+    }
 
     const totalPages = Math.max(Math.ceil(total / pageSize), 1);
 
@@ -242,15 +274,25 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log("Request body:", { ...body, notes: body.notes ? "present" : "null" });
+    console.log("📥 =====================================================");
+    console.log("📥 BUDGET REQUEST - Received body:");
+    console.log(JSON.stringify(body, null, 2));
+    console.log("📥 =====================================================");
     
-    const { title, amount, dueDate, notes, fiscalYearId, quarterSprintId, keyResultId, campaignId } = body;
+    const { title, amount, dueDate, notes, campaignId } = body;
+    
+    console.log("📝 Extracted fields:", { 
+      title, 
+      amount, 
+      dueDate, 
+      campaignId: campaignId ?? "UNDEFINED"
+    });
 
-    // Validazione
-    if (!title || !amount || !dueDate) {
-      console.log("Validation failed:", { hasTitle: !!title, hasAmount: !!amount, hasDueDate: !!dueDate });
+    // Validazione campi obbligatori
+    if (!title || !amount || !dueDate || !campaignId) {
+      console.log("Validation failed:", { hasTitle: !!title, hasAmount: !!amount, hasDueDate: !!dueDate, hasCampaignId: !!campaignId });
       return NextResponse.json(
-        { error: "Title, amount, and dueDate are required" },
+        { error: "Title, amount, dueDate e campaignId sono obbligatori" },
         { status: 400 }
       );
     }
@@ -260,60 +302,48 @@ export async function POST(request: NextRequest) {
     if (isNaN(amountNum) || amountNum <= 0) {
       console.log("Invalid amount:", amount);
       return NextResponse.json(
-        { error: "Amount must be a positive number" },
+        { error: "Amount deve essere un numero positivo" },
         { status: 400 }
       );
     }
 
-    // Trova o usa il fiscal year corrente
-    let fyId = fiscalYearId;
-    if (!fyId) {
-      console.log("No fiscalYearId provided, searching for default fiscal year");
-      let currentFY = await prisma.fiscalYear.findFirst({
-        orderBy: { createdAt: "desc" },
-      });
-      
-      // Se non esiste un fiscal year, creane uno di default per l'anno corrente
-      if (!currentFY) {
-        const currentYear = new Date().getFullYear();
-        const fiscalYearCode = `FY${currentYear}`;
-        console.log(`No fiscal year found, creating default: ${fiscalYearCode}`);
-        
-        try {
-          currentFY = await prisma.fiscalYear.create({
-            data: {
-              code: fiscalYearCode,
-              label: `Fiscal Year ${currentYear}`,
-              totalBudget: 1_000_000, // Budget di default
-              currency: "EUR",
-            },
-          });
-          console.log(`Created fiscal year: ${currentFY.code} (ID: ${currentFY.id})`);
-        } catch (fyError) {
-          console.error("Error creating fiscal year:", fyError);
-          return NextResponse.json(
-            { error: "Failed to create fiscal year", details: fyError instanceof Error ? fyError.message : String(fyError) },
-            { status: 500 }
-          );
-        }
-      } else {
-        console.log(`Using existing fiscal year: ${currentFY.code} (ID: ${currentFY.id})`);
-      }
-      fyId = currentFY.id;
-    } else {
-      // Valida che il fiscalYearId esista
-      console.log(`Validating fiscalYearId: ${fyId}`);
-      const fiscalYearExists = await prisma.fiscalYear.findUnique({
-        where: { id: parseInt(fyId.toString()) },
-      });
-      if (!fiscalYearExists) {
-        return NextResponse.json(
-          { error: "Invalid fiscal year ID" },
-          { status: 400 }
-        );
-      }
-      fyId = parseInt(fyId.toString());
+    // Validazione campaignId e ottieni fiscalYear dalla campagna
+    const parsedCampaignId = Number(campaignId);
+    if (!Number.isFinite(parsedCampaignId) || parsedCampaignId <= 0) {
+      return NextResponse.json(
+        { error: "Campaign ID non valido" },
+        { status: 400 }
+      );
     }
+
+    console.log(`🔍 Fetching campaign: ${parsedCampaignId}`);
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: parsedCampaignId },
+      select: {
+        id: true,
+        name: true,
+        fiscalYearId: true,
+      },
+    });
+
+    if (!campaign) {
+      console.log("❌ Campaign not found");
+      return NextResponse.json(
+        { error: "Campagna non trovata" },
+        { status: 404 }
+      );
+    }
+
+    if (!campaign.fiscalYearId) {
+      console.log("❌ Campaign has no fiscal year");
+      return NextResponse.json(
+        { error: "La campagna non è associata a un anno fiscale" },
+        { status: 400 }
+      );
+    }
+
+    const fyId = campaign.fiscalYearId;
+    console.log(`✅ Using fiscal year from campaign: ${fyId}`);
 
     // Validazione requesterId
     let requesterId: number;
@@ -376,156 +406,25 @@ export async function POST(request: NextRequest) {
     
     console.log(`✅ Requester verified: ${requesterExists.fullName} (${requesterExists.email}, ID: ${requesterExists.id})`);
 
-    let resolvedQuarterSprintId: number | null = null;
-    if (quarterSprintId !== undefined && quarterSprintId !== null && quarterSprintId !== "") {
-      const parsedQuarterId = Number(quarterSprintId);
-      if (!Number.isFinite(parsedQuarterId)) {
-        return NextResponse.json({ error: "Quarter sprint non valido" }, { status: 400 });
-      }
-
-      const quarterSprint = await (prisma as any).quarterSprint.findUnique({
-        where: { id: parsedQuarterId },
-        select: { id: true, fiscalYearId: true },
-      });
-
-      if (!quarterSprint) {
-        return NextResponse.json({ error: "Quarter sprint non trovato" }, { status: 404 });
-      }
-
-      resolvedQuarterSprintId = quarterSprint.id;
-      if (!fyId && quarterSprint.fiscalYearId) {
-        fyId = quarterSprint.fiscalYearId;
-      }
-    }
-
-    let resolvedKeyResultId: number | null = null;
-    if (keyResultId !== undefined && keyResultId !== null && keyResultId !== "") {
-      const parsedKeyResultId = Number(keyResultId);
-      if (!Number.isFinite(parsedKeyResultId)) {
-        return NextResponse.json({ error: "Key Result non valido" }, { status: 400 });
-      }
-
-      const keyResult = await (prisma as any).keyResult.findUnique({
-        where: { id: parsedKeyResultId },
-        select: { id: true, quarterSprintId: true },
-      });
-
-      if (!keyResult) {
-        return NextResponse.json({ error: "Key Result non trovato" }, { status: 404 });
-      }
-
-      resolvedKeyResultId = keyResult.id;
-
-      if (keyResult.quarterSprintId) {
-        if (resolvedQuarterSprintId && resolvedQuarterSprintId !== keyResult.quarterSprintId) {
-          return NextResponse.json(
-            { error: "Il Key Result selezionato appartiene a un Quarter Sprint diverso" },
-            { status: 400 }
-          );
-        }
-        resolvedQuarterSprintId = keyResult.quarterSprintId;
-      }
-    }
-
-    let resolvedCampaignId: number | null = null;
-    if (campaignId !== undefined && campaignId !== null && campaignId !== "") {
-      const parsedCampaignId = Number(campaignId);
-      if (!Number.isFinite(parsedCampaignId)) {
-        return NextResponse.json({ error: "Campagna non valida" }, { status: 400 });
-      }
-
-      const campaign = await prisma.campaign.findUnique({
-        where: { id: parsedCampaignId },
-        select: {
-          id: true,
-          fiscalYearId: true,
-          quarterSprintId: true,
-          keyResultId: true,
-        },
-      });
-
-      if (!campaign) {
-        return NextResponse.json({ error: "Campagna non trovata" }, { status: 404 });
-      }
-
-      if (campaign.fiscalYearId !== fyId) {
-        return NextResponse.json(
-          { error: "La campagna selezionata appartiene a un anno fiscale diverso" },
-          { status: 400 }
-        );
-      }
-
-      if (campaign.quarterSprintId) {
-        if (resolvedQuarterSprintId && resolvedQuarterSprintId !== campaign.quarterSprintId) {
-          return NextResponse.json(
-            { error: "La campagna selezionata appartiene a un Quarter Sprint diverso" },
-            { status: 400 }
-          );
-        }
-        resolvedQuarterSprintId = campaign.quarterSprintId;
-      }
-
-      if (campaign.keyResultId) {
-        if (resolvedKeyResultId && resolvedKeyResultId !== campaign.keyResultId) {
-          return NextResponse.json(
-            { error: "La campagna selezionata è legata a un Key Result diverso" },
-            { status: 400 }
-          );
-        }
-        resolvedKeyResultId = campaign.keyResultId;
-      }
-
-      resolvedCampaignId = campaign.id;
-    }
-
-    const linkStatus = resolvedCampaignId
-      ? BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN
-      : resolvedKeyResultId
-        ? BudgetRequestLinkStatus.ASSIGNMENT_PENDING
-        : BudgetRequestLinkStatus.UNDEFINED_OBJECTIVE;
-
     console.log("Creating budget request with data:", {
       title,
       amount: amountNum,
       dueDate: new Date(dueDate),
       fiscalYearId: fyId,
       requesterId,
-      quarterSprintId: resolvedQuarterSprintId,
-      keyResultId: resolvedKeyResultId,
-      campaignId: resolvedCampaignId,
-      linkStatus,
+      campaignId: parsedCampaignId,
     });
 
     const createData = {
       title,
-      amount: Math.round(amountNum),
+      amount: amountNum, // Manteniamo i decimali
       dueDate: new Date(dueDate),
       notes: notes || null,
       fiscalYear: { connect: { id: fyId } },
       requester: { connect: { id: requesterId } },
+      campaign: { connect: { id: parsedCampaignId } },
       status: BudgetRequestStatus.PENDING_APPROVAL,
-      linkStatus,
-      ...(resolvedQuarterSprintId
-        ? {
-            quarterSprint: {
-              connect: { id: resolvedQuarterSprintId },
-            },
-          }
-        : {}),
-      ...(resolvedKeyResultId
-        ? {
-            keyResult: {
-              connect: { id: resolvedKeyResultId },
-            },
-          }
-        : {}),
-      ...(resolvedCampaignId
-        ? {
-            campaign: {
-              connect: { id: resolvedCampaignId },
-            },
-          }
-        : {}),
+      linkStatus: BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN,
     } satisfies Prisma.BudgetRequestCreateInput;
 
     const includeRelations = {
@@ -541,21 +440,6 @@ export async function POST(request: NextRequest) {
           id: true,
           code: true,
           label: true,
-        },
-      },
-      quarterSprint: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          shortCode: true,
-        },
-      },
-      keyResult: {
-        select: {
-          id: true,
-          title: true,
-          metric: true,
         },
       },
       campaign: {

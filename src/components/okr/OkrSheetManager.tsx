@@ -24,7 +24,6 @@ import { cn } from "@/lib/utils";
 import type { FiscalYearOption } from "./OkrSheetTypes";
 import { BadgePill } from "@/components/ui/BadgePill";
 import { CreateObjectiveModal } from "./CreateObjectiveModal";
-import { CreateQuarterSprintModal } from "./CreateQuarterSprintModal";
 import { CreateKeyResultModal } from "./CreateKeyResultModal";
 
 type SheetObjective = {
@@ -41,26 +40,7 @@ type SheetObjective = {
   saving: boolean;
   isNew?: boolean;
   isVirtual?: boolean;
-  quarterSprints: SheetQuarterSprint[];
-  orphanKeyResults: SheetKeyResult[];
-};
-
-type SheetQuarterSprint = {
-  id: string;
-  name: string;
-  summary: string;
-  code: string;
-  shortCode: string;
-  quarterNumber: string;
-  startDate: string;
-  endDate: string;
-  fiscalYearId: string;
-  objectiveId: string;
-  expanded: boolean;
-  dirty: boolean;
-  saving: boolean;
-  isNew?: boolean;
-  keyResults: SheetKeyResult[];
+  keyResults: SheetKeyResult[]; // KeyResults directly under Objective
 };
 
 type SheetKeyResult = {
@@ -71,8 +51,8 @@ type SheetKeyResult = {
   progressValue: string;
   unit: string;
   weight: string;
-  quarterSprintId: string;
-  objectiveId: string;
+  objectiveId: string; // Collegato all'obiettivo strategico (opzionale)
+  objectiveTitle?: string; // Per visualizzazione
   dirty: boolean;
   saving: boolean;
   isNew?: boolean;
@@ -86,27 +66,15 @@ type FetchObjective = {
   progress: number | null;
   fiscalYearId: number;
   createdAt: string;
-  quarterSprints: Array<{
+  keyResults?: Array<{
     id: number;
-    name: string;
-    code: string | null;
-    shortCode: string | null;
-    objectiveSummary: string | null;
-    quarter: number | null;
-    startDate: string | null;
-    endDate: string | null;
-    fiscalYearId: number | null;
+    title: string;
+    metric: string;
+    targetValue: number | null;
+    progressValue: number | null;
+    unit: string | null;
+    weight: number | null;
     objectiveId: number | null;
-    keyResults: Array<{
-      id: number;
-      title: string;
-      metric: string;
-      targetValue: number | null;
-      progressValue: number | null;
-      unit: string | null;
-      weight: number | null;
-      quarterSprintId: number | null;
-    }>;
   }>;
 };
 
@@ -134,7 +102,16 @@ type FetchQuarter = {
   };
 };
 
-type FetchKeyResult = FetchObjective["quarterSprints"][number]["keyResults"][number];
+type FetchKeyResult = {
+  id: number;
+  title: string;
+  metric: string;
+  targetValue: number | null;
+  progressValue: number | null;
+  unit: string | null;
+  weight: number | null;
+  objectiveId: number | null;
+};
 
 const GOAL_TYPE_OPTIONS = [
   { value: "qualitative", label: "Qualitativo" },
@@ -323,6 +300,7 @@ export function OkrSheetManager() {
   const [loading, setLoading] = useState(true);
   const [objectives, setObjectives] = useState<SheetObjective[]>([]);
   const [fiscalYears, setFiscalYears] = useState<FiscalYearOption[]>([]);
+  const [objectivesRaw, setObjectivesRaw] = useState<FetchObjective[]>([]);
   const [activeTab, setActiveTab] = useState<"objectives" | "quarters" | "keyresults">("objectives");
   const [objectiveFilter, setObjectiveFilter] = useState<"confirmed" | "draft">("confirmed");
   const [quarterFilter, setQuarterFilter] = useState<"confirmed" | "draft">("confirmed");
@@ -330,7 +308,6 @@ export function OkrSheetManager() {
   
   // Modal states
   const [isObjectiveModalOpen, setIsObjectiveModalOpen] = useState(false);
-  const [isQuarterModalOpen, setIsQuarterModalOpen] = useState(false);
   const [isKeyResultModalOpen, setIsKeyResultModalOpen] = useState(false);
 
   const isAdmin = session?.user?.role === "admin";
@@ -339,9 +316,8 @@ export function OkrSheetManager() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [objectivesRes, quartersRes, fiscalYearsRes] = await Promise.all([
+      const [objectivesRes, fiscalYearsRes] = await Promise.all([
         fetch("/api/objectives", { credentials: "include", cache: "no-store" }),
-        fetch("/api/quarter-sprints?withCounts=true", { credentials: "include", cache: "no-store" }),
         fetch("/api/fiscal-years", { credentials: "include", cache: "no-store" }),
       ]);
 
@@ -349,105 +325,40 @@ export function OkrSheetManager() {
         const err = await objectivesRes.json().catch(() => ({}));
         throw new Error(err.error || "Impossibile caricare gli obiettivi");
       }
-      if (!quartersRes.ok) {
-        const err = await quartersRes.json().catch(() => ({}));
-        throw new Error(err.error || "Impossibile caricare i quarter sprint");
-      }
       if (!fiscalYearsRes.ok) {
         const err = await fiscalYearsRes.json().catch(() => ({}));
         throw new Error(err.error || "Impossibile caricare gli anni fiscali");
       }
 
       const objectivesPayload = await objectivesRes.json();
-      const quartersPayload = await quartersRes.json();
       const fiscalYearsPayload = await fiscalYearsRes.json();
 
-      const objectivesRaw: FetchObjective[] = objectivesPayload.data ?? objectivesPayload;
-      const quartersRaw: FetchQuarter[] = (quartersPayload.data ?? quartersPayload) as FetchQuarter[];
+      const objectivesRawData: FetchObjective[] = objectivesPayload.data ?? objectivesPayload;
       const fiscalYearsData: FiscalYearOption[] = fiscalYearsPayload.data ?? fiscalYearsPayload;
+      
+      setObjectivesRaw(objectivesRawData);
       
       console.log("[OkrSheetManager] Fiscal Years loaded:", fiscalYearsData);
 
-      // Collect all keyResults from objectives' quarterSprints
-      const allKeyResults: Array<{ quarterSprintId: number | null; [key: string]: any }> = [];
-      objectivesRaw.forEach((objective) => {
-        (objective.quarterSprints ?? []).forEach((qs: any) => {
-          (qs.keyResults ?? []).forEach((kr: any) => {
-            allKeyResults.push({
-              ...kr,
-              quarterSprintId: qs.id,
-            });
-          });
-        });
-      });
-
-      const quarterMap = new Map<string, SheetQuarterSprint[]>();
-      quartersRaw.forEach((quarter) => {
-        const owner = toId(quarter.objectiveId) || "__unassigned__";
-        if (!quarterMap.has(owner)) {
-          quarterMap.set(owner, []);
-        }
+      // Load objectives with their key results (now directly under objectives)
+      const objectiveStates: SheetObjective[] = objectivesRawData.map((objective) => {
+        const objectiveId = toId(objective.id);
         
-        // Find keyResults for this quarter sprint
-        const quarterKeyResults = allKeyResults
-          .filter((kr) => toId(kr.quarterSprintId) === toId(quarter.id))
-          .map((kr) => ({
-            id: toId(kr.id),
-            title: kr.title ?? "",
-            metric: kr.metric ?? "",
-            targetValue: kr.targetValue !== null && kr.targetValue !== undefined ? String(kr.targetValue) : "",
-            progressValue: kr.progressValue !== null && kr.progressValue !== undefined ? String(kr.progressValue) : "",
-            unit: kr.unit ?? "unit",
-            weight: toId(kr.weight) || "100",
-            quarterSprintId: toId(quarter.id),
-            objectiveId: toId(quarter.objectiveId),
-            dirty: false,
-            saving: false,
-            isNew: false, // Existing key results from database
-          }));
-
-        quarterMap.get(owner)!.push({
-          id: toId(quarter.id),
-          name: quarter.name ?? "",
-          summary: quarter.objectiveSummary ?? quarter.objective?.title ?? "",
-          code: quarter.code ?? "",
-          shortCode: quarter.shortCode ?? "",
-          quarterNumber: toQuarterString(quarter.quarter ?? getQuarterFromDate(quarter.startDate?.slice?.(0, 10) ?? null)),
-          startDate: quarter.startDate ? quarter.startDate.slice(0, 10) : "",
-          endDate: quarter.endDate ? quarter.endDate.slice(0, 10) : "",
-          fiscalYearId: toId(quarter.fiscalYearId),
-          objectiveId: toId(quarter.objectiveId),
-          expanded: true,
+        // Key Results are now directly under Objective
+        const keyResults: SheetKeyResult[] = (objective.keyResults ?? []).map((kr: any) => ({
+          id: toId(kr.id),
+          title: kr.title ?? "",
+          metric: kr.metric ?? "",
+          targetValue: kr.targetValue !== null && kr.targetValue !== undefined ? String(kr.targetValue) : "",
+          progressValue: kr.progressValue !== null && kr.progressValue !== undefined ? String(kr.progressValue) : "",
+          unit: kr.unit ?? "unit",
+          weight: toId(kr.weight) || "100",
+          objectiveId: objectiveId,
+          objectiveTitle: objective.title ?? "",
           dirty: false,
           saving: false,
-          keyResults: quarterKeyResults,
-        });
-      });
-
-      const objectiveStates: SheetObjective[] = objectivesRaw.map((objective) => {
-        const objectiveId = toId(objective.id);
-        const quartersForObjective = quarterMap.get(objectiveId) ?? [];
-        
-        // Collect orphan keyResults (keyResults without quarterSprintId or with invalid quarterSprintId)
-        const orphanKeyResults: SheetKeyResult[] = allKeyResults
-          .filter((kr) => {
-            const krObjectiveId = toId(kr.quarterSprintId ? quartersRaw.find((q) => toId(q.id) === toId(kr.quarterSprintId))?.objectiveId : null);
-            return krObjectiveId === objectiveId && (!kr.quarterSprintId || !quartersForObjective.some((qs) => toId(qs.id) === toId(kr.quarterSprintId)));
-          })
-          .map((kr) => ({
-            id: toId(kr.id),
-            title: kr.title ?? "",
-            metric: kr.metric ?? "",
-            targetValue: kr.targetValue !== null && kr.targetValue !== undefined ? String(kr.targetValue) : "",
-            progressValue: kr.progressValue !== null && kr.progressValue !== undefined ? String(kr.progressValue) : "",
-            unit: kr.unit ?? "unit",
-            weight: toId(kr.weight) || "100",
-            quarterSprintId: toId(kr.quarterSprintId),
-            objectiveId: objectiveId,
-            dirty: false,
-            saving: false,
-            isNew: false, // Existing key results are not new
-          }));
+          isNew: false,
+        }));
 
         return {
           id: objectiveId,
@@ -455,34 +366,15 @@ export function OkrSheetManager() {
           description: objective.description ?? "",
           status: objective.status ?? "ACTIVE",
           progress: objective.progress ?? null,
-          priority: "1", // Default priority (not in schema anymore, kept for UI)
-          goalType: "qualitative", // Default goalType (not in schema anymore, kept for UI)
+          priority: "1",
+          goalType: "qualitative",
           fiscalYearId: toId(objective.fiscalYearId),
           expanded: true,
           dirty: false,
           saving: false,
-          quarterSprints: quartersForObjective.map((qs) => ({ ...qs })),
-          orphanKeyResults,
+          keyResults, // Key Results direttamente nell'obiettivo
         };
       });
-
-      const unassignedQuarterStates = quarterMap.get("__unassigned__") ?? [];
-      if (unassignedQuarterStates.length > 0) {
-        objectiveStates.push({
-          id: "__virtual_unassigned__",
-          title: "Quarter Sprint non assegnati",
-          description: "Assegna questi sprint a un obiettivo nella colonna Contesto",
-          priority: "",
-          goalType: "",
-          fiscalYearId: "",
-          expanded: true,
-          dirty: false,
-          saving: false,
-          isVirtual: true,
-          quarterSprints: unassignedQuarterStates.map((qs) => ({ ...qs })),
-          orphanKeyResults: [],
-        });
-      }
 
       setFiscalYears(fiscalYearsData);
       setObjectives(objectiveStates);
@@ -532,50 +424,24 @@ export function OkrSheetManager() {
     [objectives]
   );
 
-  const quarterOptions = useMemo(() => {
-    const options = objectives.flatMap((obj) => 
-      obj.quarterSprints
-        .filter((qs) => !qs.isNew || qs.name.trim() !== "") // Include new quarters if they have a name
-        .map((qs) => ({ 
-          value: qs.id, 
-          label: qs.isNew ? `${qs.name || "Nuovo Quarter Sprint"} (da salvare)` : (qs.name || "Quarter Sprint")
-        }))
-    );
-    // Don't add empty option - quarter sprint is required
-    return options;
-  }, [objectives]);
+  const objectiveOptionsForKeyResults = useMemo(() => {
+    return objectivesRaw.map((obj) => ({
+      value: String(obj.id),
+      label: obj.title || "Senza nome",
+    }));
+  }, [objectivesRaw]);
 
-  // Extract flat lists for tabs
-  const allQuarterSprints = useMemo(() => {
-    return objectives.flatMap((obj) => 
-      obj.quarterSprints.map((qs) => ({
-        ...qs,
-        objectiveId: qs.objectiveId || obj.id,
-        objectiveTitle: obj.title,
-      }))
-    );
-  }, [objectives]);
+  // Quarter Sprints removed - no longer needed
 
   const allKeyResults = useMemo(() => {
-    const fromQuarters = objectives.flatMap((obj) =>
-      obj.quarterSprints.flatMap((qs) =>
-        qs.keyResults.map((kr) => ({
-          ...kr,
-          quarterSprintId: qs.id,
-          quarterSprintName: qs.name,
-          objectiveId: qs.objectiveId || obj.id,
-          objectiveTitle: obj.title,
-        }))
-      )
-    );
-    const fromOrphans = objectives.flatMap((obj) =>
-      obj.orphanKeyResults.map((kr) => ({
+    // Key results are now directly associated with objectives
+    return objectives.flatMap((obj) =>
+      obj.keyResults.map((kr) => ({
         ...kr,
         objectiveId: obj.id,
         objectiveTitle: obj.title,
       }))
     );
-    return [...fromQuarters, ...fromOrphans];
   }, [objectives]);
 
   const fiscalYearOptions = useMemo(() => fiscalYears.map((fy) => ({ value: String(fy.id), label: fy.label || fy.code })), [fiscalYears]);
@@ -584,101 +450,30 @@ export function OkrSheetManager() {
     setObjectives((prev) => prev.map((obj) => (obj.id === objectiveId ? { ...obj, expanded: !obj.expanded } : obj)));
   };
 
-  const toggleQuarter = (objectiveId: string, quarterId: string) => {
-    setObjectives((prev) =>
-      prev.map((obj) => {
-        if (obj.id !== objectiveId) return obj;
-        return {
-          ...obj,
-          quarterSprints: obj.quarterSprints.map((qs) => (qs.id === quarterId ? { ...qs, expanded: !qs.expanded } : qs)),
-        };
-      })
-    );
-  };
-
   const updateObjective = (objectiveId: string, updates: Partial<SheetObjective>) => {
     setObjectives((prev) =>
       prev.map((obj) => (obj.id === objectiveId ? { ...obj, ...updates, dirty: updates.dirty === undefined ? true : updates.dirty } : obj))
     );
   };
 
-  const updateQuarter = (objectiveId: string, quarterId: string, updates: Partial<SheetQuarterSprint>) => {
-    setObjectives((prev) => {
-      // Check if objectiveId is being changed
-      const isChangingObjective = updates.objectiveId !== undefined && updates.objectiveId !== objectiveId;
-      
-      if (isChangingObjective) {
-        // Find the quarter sprint and move it to the new objective
-        let quarterToMove: SheetQuarterSprint | null = null;
-        
-        const updatedObjectives = prev.map((obj) => {
-          if (obj.id === objectiveId) {
-            // Remove quarter from current objective
-            const updatedQuarters = obj.quarterSprints.filter((qs) => qs.id !== quarterId);
-            const foundQuarter = obj.quarterSprints.find((qs) => qs.id === quarterId);
-            
-            if (foundQuarter) {
-              quarterToMove = { ...foundQuarter, ...updates, dirty: updates.dirty === undefined ? true : updates.dirty };
-            }
-            
-            return { ...obj, quarterSprints: updatedQuarters };
-          }
-          return obj;
-        });
-        
-        // Add quarter to new objective
-        if (quarterToMove && updates.objectiveId) {
-          return updatedObjectives.map((obj) => {
-            if (obj.id === updates.objectiveId) {
-              return {
-                ...obj,
-                quarterSprints: [...obj.quarterSprints, quarterToMove!],
-              };
-            }
-            return obj;
-          });
-        }
-        
-        return updatedObjectives;
-      }
-      
-      // Normal update within the same objective
-      return prev.map((obj) => {
-        if (obj.id !== objectiveId) return obj;
-        return {
-          ...obj,
-          quarterSprints: obj.quarterSprints.map((qs) =>
-            qs.id === quarterId ? { ...qs, ...updates, dirty: updates.dirty === undefined ? true : updates.dirty } : qs
-          ),
-        };
-      });
-    });
+  // Quarter Sprint functions removed - no longer needed
+  const updateQuarter = (_objectiveId: string, _quarterId: string, _updates: any) => {
+    // Stub - Quarter Sprints removed
   };
-
-  const updateKeyResult = (objectiveId: string, quarterId: string | null, keyResultId: string, updates: Partial<SheetKeyResult>) => {
+  
+  const toggleQuarter = (_objectiveId: string, _quarterId: string) => {
+    // Stub - Quarter Sprints removed
+  };
+  
+  const updateKeyResult = (objectiveId: string, _quarterId: string | null, keyResultId: string, updates: Partial<SheetKeyResult>) => {
+    // Key Results are now directly under Objective, quarterId is ignored
     setObjectives((prev) =>
       prev.map((obj) => {
         if (obj.id !== objectiveId) return obj;
 
-        if (quarterId) {
-          return {
-            ...obj,
-            quarterSprints: obj.quarterSprints.map((qs) =>
-              qs.id === quarterId
-                ? {
-                    ...qs,
-                    keyResults: qs.keyResults.map((kr) =>
-                      kr.id === keyResultId ? { ...kr, ...updates, dirty: updates.dirty === undefined ? true : updates.dirty } : kr
-                    ),
-                  }
-                : qs
-            ),
-          };
-        }
-
         return {
           ...obj,
-          orphanKeyResults: obj.orphanKeyResults.map((kr) =>
+          keyResults: obj.keyResults.map((kr) =>
             kr.id === keyResultId ? { ...kr, ...updates, dirty: updates.dirty === undefined ? true : updates.dirty } : kr
           ),
         };
@@ -707,7 +502,9 @@ export function OkrSheetManager() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create objective");
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Failed to create objective:", response.status, errorData);
+        throw new Error(errorData.error || errorData.details || "Failed to create objective");
       }
 
       toast({ variant: "success", title: "Obiettivo creato", description: "L'obiettivo è stato creato con successo" });
@@ -719,45 +516,10 @@ export function OkrSheetManager() {
     }
   };
 
-  const handleCreateQuarterSprint = async (data: {
-    name: string;
-    objectiveSummary: string;
-    objectiveId: number;
-    startDate: string;
-    endDate: string;
-    fiscalYearId: number;
-    quarter: number;
-    code?: string;
-    shortCode?: string;
-  }) => {
-    try {
-      const response = await fetch("/api/quarter-sprints", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create quarter sprint");
-      }
-
-      toast({
-        variant: "success",
-        title: "Quarter Sprint creato",
-        description: "Il Quarter Sprint è stato creato con successo",
-      });
-      await fetchAll();
-    } catch (error) {
-      console.error("Error creating quarter sprint:", error);
-      toast({ variant: "error", title: "Errore", description: "Impossibile creare il Quarter Sprint" });
-      throw error;
-    }
-  };
-
   const handleCreateKeyResult = async (data: {
     title: string;
     metric: string;
-    quarterSprintId: number;
+    objectiveId?: number; // Opzionale
     targetValue: number;
     progressValue: number;
     weight: number;
@@ -765,24 +527,33 @@ export function OkrSheetManager() {
     ownerId: number | null;
   }) => {
     try {
+      const payload: any = {
+        title: data.title,
+        metric: data.metric,
+        targetValue: data.targetValue,
+        progressValue: data.progressValue,
+        weight: data.weight,
+        unit: data.unit || "unit",
+        ownerId: data.ownerId,
+        status: "NOT_STARTED",
+      };
+
+      // objectiveId è opzionale
+      if (data.objectiveId) {
+        payload.objectiveId = data.objectiveId;
+      }
+
       const response = await fetch("/api/key-results", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: data.title,
-          metric: data.metric,
-          quarterSprintId: data.quarterSprintId,
-          targetValue: data.targetValue,
-          progressValue: data.progressValue,
-          weight: data.weight,
-          unit: data.unit || "unit",
-          ownerId: data.ownerId,
-          status: "NOT_STARTED",
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create key result");
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Failed to create key result:", response.status, errorData);
+        toast({ variant: "error", title: "Errore", description: errorData.error || errorData.details || "Impossibile creare il Key Result" });
+        throw new Error(errorData.error || errorData.details || "Failed to create key result");
       }
 
       toast({
@@ -793,17 +564,13 @@ export function OkrSheetManager() {
       await fetchAll();
     } catch (error) {
       console.error("Error creating key result:", error);
-      toast({ variant: "error", title: "Errore", description: "Impossibile creare il Key Result" });
+      // Toast già mostrato sopra, non mostrare duplicato
       throw error;
     }
   };
 
   const addObjective = () => {
     setIsObjectiveModalOpen(true);
-  };
-
-  const addQuarter = (objectiveId: string) => {
-    setIsQuarterModalOpen(true);
   };
 
   const addKeyResult = (objectiveId: string, quarterId: string | null) => {
@@ -818,36 +585,19 @@ export function OkrSheetManager() {
     }
   };
 
-  const handleResetQuarter = (objectiveId: string, quarter: SheetQuarterSprint) => {
-    if (quarter.isNew) {
-      setObjectives((prev) =>
-        prev.map((obj) =>
-          obj.id === objectiveId
-            ? { ...obj, quarterSprints: obj.quarterSprints.filter((qs) => qs.id !== quarter.id) }
-            : obj
-        )
-      );
-    } else {
-      fetchAll();
-    }
+  // Quarter Sprint functions removed
+  const handleResetQuarter = (_objectiveId: string, _quarter: any) => {
+    // Stub - Quarter Sprints removed
   };
 
-  const handleResetKeyResult = (objectiveId: string, quarterId: string | null, keyResult: SheetKeyResult) => {
+  const handleResetKeyResult = (objectiveId: string, _quarterId: string | null, keyResult: SheetKeyResult) => {
     if (keyResult.isNew) {
       setObjectives((prev) =>
         prev.map((obj) => {
           if (obj.id !== objectiveId) return obj;
-          if (quarterId) {
-            return {
-              ...obj,
-              quarterSprints: obj.quarterSprints.map((qs) =>
-                qs.id === quarterId ? { ...qs, keyResults: qs.keyResults.filter((kr) => kr.id !== keyResult.id) } : qs
-              ),
-            };
-          }
           return {
             ...obj,
-            orphanKeyResults: obj.orphanKeyResults.filter((kr) => kr.id !== keyResult.id),
+            keyResults: obj.keyResults.filter((kr) => kr.id !== keyResult.id),
           };
         })
       );
@@ -859,7 +609,7 @@ export function OkrSheetManager() {
   const deleteObjective = async (objective: SheetObjective) => {
     // Don't allow deletion of new/unsaved objectives
     if (objective.isNew) {
-      toast({ variant: "info", title: "Impossibile eliminare", description: "Salva prima l'obiettivo per poterlo eliminare, oppure usa Reset per rimuoverlo." });
+      toast({ variant: "default", title: "Impossibile eliminare", description: "Salva prima l'obiettivo per poterlo eliminare, oppure usa Reset per rimuoverlo." });
       return;
     }
 
@@ -891,7 +641,7 @@ export function OkrSheetManager() {
       return;
     }
 
-    if (!confirm(`Sei sicuro di voler eliminare l'obiettivo "${objective.title}"? Questa azione eliminerà anche tutti i Quarter Sprint e Key Results associati e non può essere annullata.`)) {
+    if (!confirm(`Sei sicuro di voler eliminare l'obiettivo "${objective.title}"? Questa azione eliminerà anche tutti i Key Results associati e non può essere annullata.`)) {
       return;
     }
 
@@ -911,22 +661,13 @@ export function OkrSheetManager() {
         throw new Error(result.error || "Impossibile eliminare l'obiettivo");
       }
 
-      toast({ variant: "success", title: "Obiettivo eliminato" });
-      
-      // Show info about deleted dependent items
-      const deletedQuarters = result.deletedQuarterSprintsCount || 0;
       const deletedKeyResults = result.deletedKeyResultsCount || 0;
       
-      if (deletedQuarters > 0 || deletedKeyResults > 0) {
-        const parts: string[] = [];
-        if (deletedQuarters > 0) parts.push(`${deletedQuarters} Quarter Sprint`);
-        if (deletedKeyResults > 0) parts.push(`${deletedKeyResults} Key Result${deletedKeyResults > 1 ? 's' : ''}`);
-        toast({ 
-          variant: "info", 
-          title: "Elementi collegati eliminati",
-          description: `${parts.join(' e ')} eliminati automaticamente.`
-        });
-      }
+      toast({ 
+        variant: "success", 
+        title: "Obiettivo eliminato",
+        description: deletedKeyResults > 0 ? `${deletedKeyResults} Key Result${deletedKeyResults > 1 ? 's' : ''} eliminati automaticamente.` : undefined
+      });
       
       await fetchAll();
     } catch (error) {
@@ -935,59 +676,14 @@ export function OkrSheetManager() {
     }
   };
 
-  const deleteQuarter = async (objectiveId: string, quarter: SheetQuarterSprint) => {
-    // Don't allow deletion of new/unsaved quarters
-    if (quarter.isNew) {
-      toast({ variant: "info", title: "Impossibile eliminare", description: "Salva prima il Quarter Sprint per poterlo eliminare, oppure usa Reset per rimuoverlo." });
-      return;
-    }
-
-    // Parse ID - handle both string and number IDs
-    const quarterIdStr = String(quarter.id).trim();
-    const quarterIdNumber = parseInt(quarterIdStr, 10);
-    
-    // Check if it's a temporary ID (contains "-tmp-" or starts with "qs")
-    const isTemporaryId = quarterIdStr.includes("-tmp-") || quarterIdStr.startsWith("qs");
-    
-    if (isTemporaryId || !Number.isFinite(quarterIdNumber) || quarterIdNumber <= 0 || isNaN(quarterIdNumber)) {
-      toast({ variant: "warning", title: "ID non valido", description: "Impossibile eliminare un Quarter Sprint non salvato" });
-      return;
-    }
-
-    if (!confirm(`Sei sicuro di voler eliminare il Quarter Sprint "${quarter.name}"? Questa azione eliminerà anche tutti i Key Results associati e non può essere annullata.`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/quarter-sprints/${quarterIdNumber}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-
-      const result = await response.json().catch(() => ({}));
-      
-      if (!response.ok) {
-        throw new Error(result.error || "Impossibile eliminare il Quarter Sprint");
-      }
-
-      const deletedCount = result.deletedKeyResultsCount || 0;
-      
-      toast({ 
-        variant: "success", 
-        title: "Quarter Sprint eliminato",
-        description: deletedCount > 0 ? `${deletedCount} Key Result${deletedCount > 1 ? 's' : ''} eliminato${deletedCount > 1 ? 'i' : ''} automaticamente.` : undefined
-      });
-      await fetchAll();
-    } catch (error) {
-      console.error("deleteQuarter", error);
-      toast({ variant: "error", title: "Errore", description: error instanceof Error ? error.message : "Eliminazione Quarter Sprint non riuscita" });
-    }
+  const deleteQuarter = async (_objectiveId: string, _quarter: any) => {
+    // Stub - Quarter Sprints removed
   };
 
   const deleteKeyResult = async (objectiveId: string, quarterId: string | null, keyResult: SheetKeyResult) => {
     // Don't allow deletion of new/unsaved key results
     if (keyResult.isNew) {
-      toast({ variant: "info", title: "Impossibile eliminare", description: "Salva prima il Key Result per poterlo eliminare, oppure usa Reset per rimuoverlo." });
+      toast({ variant: "default", title: "Impossibile eliminare", description: "Salva prima il Key Result per poterlo eliminare, oppure usa Reset per rimuoverlo." });
       return;
     }
 
@@ -1110,7 +806,7 @@ export function OkrSheetManager() {
       
       if (isObjectiveNew && quarterToSave.isNew) {
         toast({ 
-          variant: "info", 
+          variant: "default", 
           title: "Salva prima l'obiettivo", 
           description: "Devi salvare l'obiettivo prima di poter salvare il quarter sprint. Salva l'obiettivo e poi salva il quarter sprint." 
         });
@@ -1155,7 +851,7 @@ export function OkrSheetManager() {
       const parsedObjectiveId = Number(quarterToSave.objectiveId);
       if (!Number.isFinite(parsedObjectiveId) || parsedObjectiveId <= 0) {
         toast({ 
-          variant: "info", 
+          variant: "default", 
           title: "Salva prima l'obiettivo", 
           description: "L'obiettivo collegato non è ancora stato salvato. Salva prima l'obiettivo e poi salva il quarter sprint." 
         });
@@ -1245,37 +941,21 @@ export function OkrSheetManager() {
     updateKeyResult(objectiveId, quarterId, keyResult.id, { saving: true });
 
     try {
-      // Validate quarterSprintId is required
-      if (!keyResult.quarterSprintId || keyResult.quarterSprintId === "") {
+      // Validate objectiveId is required
+      if (!keyResult.objectiveId || keyResult.objectiveId === "") {
         toast({ 
           variant: "warning", 
-          title: "Quarter Sprint obbligatorio", 
-          description: "Ogni Key Result deve essere associato a un Quarter Sprint. Seleziona un Quarter Sprint dalla lista oppure creane uno nuovo dal tab 'Quarter Sprint'." 
+          title: "Obiettivo Strategico obbligatorio", 
+          description: "Ogni Key Result deve essere associato a un Obiettivo Strategico." 
         });
         updateKeyResult(objectiveId, quarterId, keyResult.id, { saving: false });
         return;
       }
 
-      const parsedQuarterSprintId = Number(keyResult.quarterSprintId);
+      const parsedObjectiveId = Number(keyResult.objectiveId);
       
-      // Check if it's a temporary ID (starts with "qs" or "kr")
-      const isTemporaryId = typeof keyResult.quarterSprintId === "string" && (keyResult.quarterSprintId.startsWith("qs") || keyResult.quarterSprintId.startsWith("kr"));
-      
-      if (isTemporaryId || !Number.isFinite(parsedQuarterSprintId) || parsedQuarterSprintId <= 0) {
-        // Find the quarter sprint to check if it's saved
-        const quarterSprint = objectives
-          .flatMap((obj) => obj.quarterSprints)
-          .find((qs) => qs.id === keyResult.quarterSprintId);
-        
-        if (quarterSprint?.isNew) {
-          toast({ 
-            variant: "info", 
-            title: "Salva prima il Quarter Sprint", 
-            description: "Il Quarter Sprint selezionato non è ancora stato salvato. Vai al tab 'Quarter Sprint', salva il Quarter Sprint, e poi torna qui per salvare il Key Result." 
-          });
-        } else {
-          toast({ variant: "warning", title: "Quarter Sprint non valido", description: "Seleziona un Quarter Sprint valido e salvato" });
-        }
+      if (!Number.isFinite(parsedObjectiveId) || parsedObjectiveId <= 0) {
+        toast({ variant: "warning", title: "Obiettivo Strategico non valido", description: "Seleziona un Obiettivo Strategico valido" });
         updateKeyResult(objectiveId, quarterId, keyResult.id, { saving: false });
         return;
       }
@@ -1314,11 +994,11 @@ export function OkrSheetManager() {
       const payload = {
         title: keyResult.title,
         metric: keyResult.metric,
-        targetValue: parsedTargetValue, // Required, non-null
+        targetValue: parsedTargetValue,
         progressValue: parsedProgressValue,
         unit: keyResult.unit || "unit",
         weight: parsedWeight,
-        quarterSprintId: parsedQuarterSprintId,
+        objectiveId: parsedObjectiveId,
       };
 
       let response: Response;
@@ -1392,16 +1072,9 @@ export function OkrSheetManager() {
   };
 
   const findObjectiveForKeyResult = (keyResultId: string): { objectiveId: string; quarterId: string | null; keyResult: SheetKeyResult | null } => {
+    // Key Results are now directly under Objective
     for (const obj of objectives) {
-      // Check in quarter sprints
-      for (const qs of obj.quarterSprints) {
-        const kr = qs.keyResults.find((k) => k.id === keyResultId);
-        if (kr) {
-          return { objectiveId: obj.id, quarterId: qs.id, keyResult: kr };
-        }
-      }
-      // Check in orphan key results
-      const kr = obj.orphanKeyResults.find((k) => k.id === keyResultId);
+      const kr = obj.keyResults.find((k) => k.id === keyResultId);
       if (kr) {
         return { objectiveId: obj.id, quarterId: null, keyResult: kr };
       }
@@ -1427,11 +1100,11 @@ export function OkrSheetManager() {
                     </p>
                     <ol className="mt-2 space-y-1 text-xs text-blue-800 dark:text-blue-200">
                       <li><strong>1.</strong> Crea e salva un <strong>Obiettivo</strong></li>
-                      <li><strong>2.</strong> Crea e salva un <strong>Quarter Sprint</strong> (collegato all'obiettivo)</li>
-                      <li><strong>3.</strong> Crea e salva i <strong>Key Results</strong> (collegati al Quarter Sprint)</li>
+                      <li><strong>2.</strong> Crea e salva una <strong>Campagna</strong> (collegata all'obiettivo)</li>
+                      <li><strong>3.</strong> Crea e salva i <strong>Key Results</strong> (collegati alla Campagna)</li>
                     </ol>
                     <p className="mt-2 text-xs italic text-blue-700 dark:text-blue-300">
-                      💡 Ogni Key Result deve essere associato a un Quarter Sprint salvato.
+                      💡 Ogni Key Result deve essere associato a una Campagna salvata.
                     </p>
                   </div>
                 }
@@ -1444,7 +1117,7 @@ export function OkrSheetManager() {
               </Tooltip>
             </CardTitle>
             <p className="text-sm text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
-              Gestisci obiettivi, quarter sprint e key result separatamente con lookup per creare le relazioni.
+              Gestisci obiettivi, campagne e key result separatamente con lookup per creare le relazioni.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1456,35 +1129,20 @@ export function OkrSheetManager() {
                 + Nuovo obiettivo
               </Button>
             )}
-            {activeTab === "quarters" && (
-              <Button variant="primary" size="sm" onClick={() => {
-                const defaultObj = objectives.find((o) => !o.isVirtual);
-                if (defaultObj) addQuarter(defaultObj.id);
-                else toast({ variant: "warning", title: "Crea prima un obiettivo", description: "Devi creare almeno un obiettivo prima di aggiungere quarter sprint." });
-              }}>
-                + Nuovo Quarter Sprint
-              </Button>
-            )}
             {activeTab === "keyresults" && (
               <Button variant="primary" size="sm" onClick={() => {
-                const defaultObj = objectives.find((o) => !o.isVirtual);
-                const hasQuarterSprints = objectives.some((obj) => obj.quarterSprints.length > 0);
+                const hasObjectives = objectiveOptionsForKeyResults.length > 0;
                 
-                if (!defaultObj) {
-                  toast({ variant: "warning", title: "Crea prima un obiettivo", description: "Devi creare e salvare almeno un obiettivo prima di aggiungere Key Results." });
-                  return;
-                }
-                
-                if (!hasQuarterSprints) {
+                if (!hasObjectives) {
                   toast({ 
-                    variant: "info", 
-                    title: "Crea prima un Quarter Sprint", 
-                    description: "Per creare un Key Result, devi prima creare e salvare un Quarter Sprint. Vai al tab 'Quarter Sprint' per crearne uno." 
+                    variant: "warning", 
+                    title: "Crea prima un obiettivo", 
+                    description: "Devi creare e salvare almeno un Obiettivo Strategico prima di aggiungere Key Results." 
                   });
                   return;
                 }
                 
-                addKeyResult(defaultObj.id, null);
+                addKeyResult("", null);
               }}>
                 + Nuovo Key Result
               </Button>
@@ -1495,14 +1153,13 @@ export function OkrSheetManager() {
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
             <TabsList>
               <TabsTrigger value="objectives">Obiettivi</TabsTrigger>
-              <TabsTrigger value="quarters">Quarter Sprint</TabsTrigger>
               <TabsTrigger value="keyresults">Key Results</TabsTrigger>
             </TabsList>
 
             <TabsContent value="objectives">
               <div className="mb-4 flex items-center justify-end gap-1">
                 <Button
-                  variant={objectiveFilter === "confirmed" ? "default" : "ghost"}
+                  variant={objectiveFilter === "confirmed" ? "primary" : "ghost"}
                   size="sm"
                   onClick={() => setObjectiveFilter("confirmed")}
                   className={`text-xs ${objectiveFilter === "confirmed" ? "" : "text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"}`}
@@ -1525,7 +1182,7 @@ export function OkrSheetManager() {
                   Confermati
                 </Button>
                 <Button
-                  variant={objectiveFilter === "draft" ? "default" : "ghost"}
+                  variant={objectiveFilter === "draft" ? "primary" : "ghost"}
                   size="sm"
                   onClick={() => setObjectiveFilter("draft")}
                   className={`text-xs ${objectiveFilter === "draft" ? "" : "text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"}`}
@@ -1557,7 +1214,6 @@ export function OkrSheetManager() {
                       <TableHead>Anno Fiscale</TableHead>
                       <TableHead>Stato</TableHead>
                       <TableHead>Progresso</TableHead>
-                      <TableHead>Quarter Sprint</TableHead>
                       <TableHead>Key Results</TableHead>
                       <TableHead className="text-right">Azioni</TableHead>
                     </TableRow>
@@ -1566,13 +1222,12 @@ export function OkrSheetManager() {
                     {objectives
                       .filter((o) => !o.isVirtual)
                       .filter((objective) => {
-                        const hasKeyResults = objective.quarterSprints.some((qs) => qs.keyResults.length > 0);
-                        const isConfirmed = objective.quarterSprints.length > 0 && hasKeyResults;
+                        const hasKeyResults = objective.keyResults.length > 0;
+                        const isConfirmed = hasKeyResults;
                         return objectiveFilter === "confirmed" ? isConfirmed : !isConfirmed;
                       })
                       .map((objective) => {
-                      const quarterCount = objective.quarterSprints.length;
-                      const keyResultCount = objective.quarterSprints.reduce((sum, qs) => sum + qs.keyResults.length, 0) + objective.orphanKeyResults.length;
+                      const keyResultCount = objective.keyResults.length;
 
                       return (
                         <TableRow key={objective.id} className="border-t">
@@ -1615,9 +1270,6 @@ export function OkrSheetManager() {
                           </TableCell>
                           <TableCell>
                             <span className="text-sm">{objective.progress !== null ? `${objective.progress}%` : "-"}</span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm">{quarterCount} Quarter Sprint</span>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm">{keyResultCount} Key Results</span>
@@ -1710,262 +1362,10 @@ export function OkrSheetManager() {
               </div>
             </TabsContent>
 
-            <TabsContent value="quarters">
-              <div className="mb-4 flex items-center justify-end gap-1">
-                <Button
-                  variant={quarterFilter === "confirmed" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setQuarterFilter("confirmed")}
-                  className={`text-xs ${quarterFilter === "confirmed" ? "" : "text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"}`}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mr-1"
-                  >
-                    <polyline points="9 11 12 14 22 4" />
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                  </svg>
-                  Confermati
-                </Button>
-                <Button
-                  variant={quarterFilter === "draft" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setQuarterFilter("draft")}
-                  className={`text-xs ${quarterFilter === "draft" ? "" : "text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"}`}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mr-1"
-                  >
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  In attivazione
-                </Button>
-              </div>
-              <div className="w-full overflow-x-auto">
-                <Table className="min-w-[1000px] text-[0.85rem]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Summary</TableHead>
-                      <TableHead>Obiettivo (Lookup)</TableHead>
-                      <TableHead>Inizio</TableHead>
-                      <TableHead>Fine</TableHead>
-                      <TableHead>Codice</TableHead>
-                      <TableHead>Key Results</TableHead>
-                      <TableHead className="text-right">Azioni</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {allQuarterSprints
-                      .filter((quarter) => {
-                        const hasKeyResults = quarter.keyResults.length > 0;
-                        return quarterFilter === "confirmed" ? hasKeyResults : !hasKeyResults;
-                      })
-                      .map((quarter) => {
-                      const { objectiveId } = findObjectiveForQuarter(quarter.id);
-
-                      return (
-                        <TableRow key={quarter.id} className="border-t">
-                          <TableCell>
-                            <Input
-                              value={quarter.name}
-                              onChange={(event) => {
-                                const { objectiveId: objId } = findObjectiveForQuarter(quarter.id);
-                                updateQuarter(objId, quarter.id, { name: event.target.value });
-                              }}
-                              placeholder="Nome quarter sprint"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <textarea
-                              value={quarter.summary}
-                              onChange={(event) => {
-                                const { objectiveId: objId } = findObjectiveForQuarter(quarter.id);
-                                updateQuarter(objId, quarter.id, { summary: event.target.value });
-                              }}
-                              rows={2}
-                              className="w-full resize-none border-b border-[var(--color-neutral-200)] bg-transparent px-0 py-2 text-sm text-[var(--color-primary)] focus:border-[var(--color-secondary-cerulean)] focus:outline-none dark:border-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]"
-                              placeholder="Summary"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              value={quarter.objectiveId || ""}
-                              onChange={(event) => {
-                                const { objectiveId: objId } = findObjectiveForQuarter(quarter.id);
-                                updateQuarter(objId, quarter.id, { objectiveId: event.target.value });
-                              }}
-                            >
-                              <option value="">Senza obiettivo</option>
-                              {objectiveOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="date"
-                              value={quarter.startDate || ""}
-                              onChange={(event) => {
-                                const { objectiveId: objId } = findObjectiveForQuarter(quarter.id);
-                                const derived = getQuarterFromDate(event.target.value);
-                                updateQuarter(objId, quarter.id, {
-                                  startDate: event.target.value,
-                                  quarterNumber: derived ? String(derived) : "",
-                                });
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="date"
-                              value={quarter.endDate || ""}
-                              onChange={(event) => {
-                                const { objectiveId: objId } = findObjectiveForQuarter(quarter.id);
-                                updateQuarter(objId, quarter.id, { endDate: event.target.value });
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={quarter.code}
-                              onChange={(event) => {
-                                const { objectiveId: objId } = findObjectiveForQuarter(quarter.id);
-                                updateQuarter(objId, quarter.id, { code: event.target.value });
-                              }}
-                              placeholder="Codice"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm">{quarter.keyResults.length} Key Results</span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {quarter.dirty && (
-                                <>
-                                  <Button 
-                                    size="sm" 
-                                    variant="primary" 
-                                    onClick={() => {
-                                      const { objectiveId: objId, quarter: q } = findObjectiveForQuarter(quarter.id);
-                                      if (q) saveQuarter(objId, q);
-                                    }} 
-                                    disabled={quarter.saving || !quarter.dirty}
-                                    className="hidden sm:inline-flex"
-                                    title="Salva"
-                                  >
-                                    {quarter.saving ? "Salvataggio..." : "Salva"}
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="primary" 
-                                    onClick={() => {
-                                      const { objectiveId: objId, quarter: q } = findObjectiveForQuarter(quarter.id);
-                                      if (q) saveQuarter(objId, q);
-                                    }} 
-                                    disabled={quarter.saving || !quarter.dirty}
-                                    className="sm:hidden"
-                                    title="Salva"
-                                  >
-                                    {quarter.saving ? (
-                                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                      </svg>
-                                    ) : (
-                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    )}
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    onClick={() => {
-                                      const { objectiveId: objId, quarter: q } = findObjectiveForQuarter(quarter.id);
-                                      if (q) handleResetQuarter(objId, q);
-                                    }} 
-                                    disabled={quarter.saving}
-                                    className="hidden sm:inline-flex"
-                                    title="Reset"
-                                  >
-                                    Reset
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    onClick={() => {
-                                      const { objectiveId: objId, quarter: q } = findObjectiveForQuarter(quarter.id);
-                                      if (q) handleResetQuarter(objId, q);
-                                    }} 
-                                    disabled={quarter.saving}
-                                    className="sm:hidden"
-                                    title="Reset"
-                                  >
-                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                  </Button>
-                                </>
-                              )}
-                              {!quarter.isNew && (
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  onClick={() => {
-                                    const { objectiveId: objId } = findObjectiveForQuarter(quarter.id);
-                                    deleteQuarter(objId, quarter);
-                                  }} 
-                                  disabled={quarter.saving}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20"
-                                  title="Elimina"
-                                >
-                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {allQuarterSprints.length === 0 && !loading && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="py-12 text-center text-sm text-[var(--color-neutral-500)] dark:text-[var(--color-tertiary-ice)]/70">
-                          Nessun quarter sprint ancora configurato.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-
             <TabsContent value="keyresults">
               <div className="mb-4 flex items-center justify-end gap-1">
                 <Button
-                  variant={keyResultFilter === "confirmed" ? "default" : "ghost"}
+                  variant={keyResultFilter === "confirmed" ? "primary" : "ghost"}
                   size="sm"
                   onClick={() => setKeyResultFilter("confirmed")}
                   className={`text-xs ${keyResultFilter === "confirmed" ? "" : "text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"}`}
@@ -1988,7 +1388,7 @@ export function OkrSheetManager() {
                   Confermati
                 </Button>
                 <Button
-                  variant={keyResultFilter === "draft" ? "default" : "ghost"}
+                  variant={keyResultFilter === "draft" ? "primary" : "ghost"}
                   size="sm"
                   onClick={() => setKeyResultFilter("draft")}
                   className={`text-xs ${keyResultFilter === "draft" ? "" : "text-[var(--color-neutral-500)] hover:text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]/70 dark:hover:text-[var(--color-tertiary-ice)]"}`}
@@ -2012,13 +1412,12 @@ export function OkrSheetManager() {
                 </Button>
               </div>
               <div className="w-full overflow-x-auto">
-                <Table className="min-w-[1300px] text-[0.85rem]">
+                <Table className="min-w-[1100px] text-[0.85rem]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="min-w-[180px]">Titolo</TableHead>
                       <TableHead className="min-w-[120px]">Metrica</TableHead>
-                      <TableHead className="min-w-[180px]">Quarter Sprint (Lookup)</TableHead>
-                      <TableHead className="min-w-[180px]">Obiettivo (Lookup)</TableHead>
+                      <TableHead className="min-w-[180px]">Obiettivo Strategico</TableHead>
                       <TableHead className="min-w-[100px]">Target</TableHead>
                       <TableHead className="min-w-[100px]">Progresso</TableHead>
                       <TableHead className="min-w-[80px]">Peso</TableHead>
@@ -2032,8 +1431,8 @@ export function OkrSheetManager() {
                         const isConfirmed = !keyResult.isNew && 
                                            keyResult.title.trim() !== "" && 
                                            keyResult.metric.trim() !== "" && 
-                                           keyResult.quarterSprintId && 
-                                           keyResult.quarterSprintId !== "" &&
+                                           keyResult.objectiveId && 
+                                           keyResult.objectiveId !== "" &&
                                            keyResult.targetValue && 
                                            keyResult.targetValue !== "";
                         return keyResultFilter === "confirmed" ? isConfirmed : !isConfirmed;
@@ -2064,13 +1463,13 @@ export function OkrSheetManager() {
                       ];
 
                       // Get objective title from lookup
-                      const objTitle = objectives.find((o) => o.id === objectiveId || o.quarterSprints.some((qs) => qs.id === keyResult.quarterSprintId))?.title || "";
+                      const objTitle = objectives.find((o) => o.id === objectiveId)?.title || "";
                       
                       // Check if key result is ready to save
                       const isReadyToSave = keyResult.title.trim() !== "" && 
                                            keyResult.metric.trim() !== "" && 
-                                           keyResult.quarterSprintId && 
-                                           keyResult.quarterSprintId !== "" &&
+                                           keyResult.objectiveId && 
+                                           keyResult.objectiveId !== "" &&
                                            keyResult.targetValue.trim() !== "";
 
                       return (
@@ -2099,32 +1498,24 @@ export function OkrSheetManager() {
                           </TableCell>
                           <TableCell>
                             <Select
-                              value={keyResult.quarterSprintId || ""}
+                              value={keyResult.objectiveId || ""}
                               onChange={(event) => {
                                 const { objectiveId: objId, quarterId: qId } = findObjectiveForKeyResult(keyResult.id);
-                                updateKeyResult(objId, qId, keyResult.id, { quarterSprintId: event.target.value });
+                                updateKeyResult(objId, qId, keyResult.id, { objectiveId: event.target.value });
                               }}
-                              className={!keyResult.quarterSprintId || keyResult.quarterSprintId === "" ? "border-red-300 dark:border-red-700" : ""}
                             >
-                              <option value="">⚠️ Seleziona Quarter Sprint</option>
-                              {quarterOptions.length === 0 ? (
-                                <option value="" disabled>Nessun Quarter Sprint disponibile. Crea prima un Quarter Sprint.</option>
-                              ) : (
-                                quarterOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))
-                              )}
+                              <option value="">-- Nessun obiettivo --</option>
+                              {objectiveOptionsForKeyResults.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
                             </Select>
-                            {(!keyResult.quarterSprintId || keyResult.quarterSprintId === "") && (
-                              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                                ⚠️ Obbligatorio: ogni Key Result deve essere associato a un Quarter Sprint
+                            {keyResult.objectiveTitle && (
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                📌 {keyResult.objectiveTitle}
                               </p>
                             )}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm">{objTitle || "-"}</span>
                           </TableCell>
                           <TableCell>
                             <Input
@@ -2268,7 +1659,7 @@ export function OkrSheetManager() {
                           <div className="flex flex-col items-center gap-3">
                             <p>Nessun key result ancora configurato.</p>
                             <p className="text-xs text-[var(--color-neutral-400)] dark:text-[var(--color-tertiary-ice)]/50">
-                              Crea prima un Obiettivo e un Quarter Sprint, poi aggiungi i Key Results.
+                              Crea prima un Obiettivo e una Campagna, poi aggiungi i Key Results.
                             </p>
                           </div>
                         </TableCell>
@@ -2290,31 +1681,11 @@ export function OkrSheetManager() {
         fiscalYears={fiscalYears}
       />
 
-      <CreateQuarterSprintModal
-        isOpen={isQuarterModalOpen}
-        onClose={() => setIsQuarterModalOpen(false)}
-        onSave={handleCreateQuarterSprint}
-        objectives={objectiveOptions.map((opt) => ({
-          id: opt.value,
-          title: opt.label,
-        }))}
-        fiscalYears={fiscalYears}
-      />
-
       <CreateKeyResultModal
         isOpen={isKeyResultModalOpen}
         onClose={() => setIsKeyResultModalOpen(false)}
         onSave={handleCreateKeyResult}
-        quarterSprints={allQuarterSprints
-          .filter((qs) => !qs.isNew)
-          .map((qs) => {
-            const obj = objectives.find((o) => o.quarterSprints.some((q) => q.id === qs.id));
-            return {
-              id: qs.id,
-              name: qs.name || "Quarter Sprint",
-              objectiveTitle: obj?.title || "Obiettivo sconosciuto",
-            };
-          })}
+        objectives={objectiveOptionsForKeyResults.map((opt) => ({ id: opt.value, title: opt.label }))}
         currentUserId={currentUserId}
       />
     </div>

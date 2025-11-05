@@ -19,7 +19,7 @@ export type CampaignAllocation = {
     name: string;
     code: string | null;
     shortCode: string | null;
-    quarter: number;
+    quarter: number | null;
     objective: {
       title: string;
       description: string | null;
@@ -39,21 +39,7 @@ export type UpcomingApproval = {
   dueDate: string;
 };
 
-export type QuarterSprintSummary = {
-  id: number;
-  name: string;
-  code: string | null;
-  shortCode: string | null;
-  quarter: number;
-  objective: {
-    id: number;
-    title: string;
-    description: string | null;
-    status: string;
-  } | null;
-  startDate: string | null;
-  endDate: string | null;
-};
+// QuarterSprintSummary removed - no longer needed
 
 type CampaignWithRelations = {
   name: string;
@@ -61,22 +47,16 @@ type CampaignWithRelations = {
   allocations: Array<{ allocated: number; spent: number }>;
   channel: { name: string };
   owner: { fullName: string; email: string };
-  quarterSprint: {
+  objective: {
     id: number;
-    name: string;
-    code: string | null;
-    shortCode: string | null;
-    quarter: number;
-    objective: {
-      id: number;
-      title: string;
-      description: string | null;
-      status: string;
-      progress: number | null;
-    } | null;
-    startDate: Date | null;
-    endDate: Date | null;
+    title: string;
+    description: string | null;
+    status: string;
+    progress: number | null;
   } | null;
+  startDate: Date | null;
+  endDate: Date | null;
+  quarter: number | null;
 };
 
 export type Insight = {
@@ -90,7 +70,6 @@ export type DashboardData = {
   campaignAllocations: CampaignAllocation[];
   upcomingApprovals: UpcomingApproval[];
   insights: Insight[];
-  quarterTimeline: QuarterSprintSummary[];
 };
 
 function mapTrend(trend: MetricTrend): SummaryMetric["trend"] {
@@ -104,51 +83,8 @@ export async function getDashboardData(): Promise<DashboardData> {
     orderBy: { createdAt: "desc" },
   });
 
-  // Recupera quarter sprint da novembre 2024 in poi, indipendentemente dal fiscal year
-  const quarterSprintsPromise = (prisma as any).quarterSprint.findMany({
-    where: {
-      OR: fiscalYear
-        ? [
-            { fiscalYearId: fiscalYear.id },
-            { startDate: { gte: new Date("2024-11-01") } },
-          ]
-        : [{ startDate: { gte: new Date("2024-11-01") } }],
-    },
-    include: {
-      objective: {
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          status: true,
-        },
-      },
-    },
-    orderBy: [{ startDate: "asc" }, { name: "asc" }],
-  });
-
   if (!fiscalYear) {
-    const quarterSprints = await quarterSprintsPromise;
-    const quarterTimeline: QuarterSprintSummary[] = quarterSprints.map((quarter: any) => {
-      return {
-        id: quarter.id,
-        name: quarter.name,
-        code: quarter.code,
-        shortCode: quarter.shortCode ?? null,
-        quarter: quarter.quarter,
-        objective: quarter.objective
-          ? {
-              id: quarter.objective.id,
-              title: quarter.objective.title,
-              description: quarter.objective.description,
-              status: quarter.objective.status,
-            }
-          : null,
-        startDate: quarter.startDate ? quarter.startDate.toISOString() : null,
-        endDate: quarter.endDate ? quarter.endDate.toISOString() : null,
-      };
-    });
-    return { summaryMetrics: [], campaignAllocations: [], upcomingApprovals: [], insights: [], quarterTimeline };
+    return { summaryMetrics: [], campaignAllocations: [], upcomingApprovals: [], insights: [] };
   }
 
   // Trova il fiscal year più recente che ha BudgetSnapshot
@@ -227,10 +163,15 @@ export async function getDashboardData(): Promise<DashboardData> {
     };
   });
 
-  const [campaigns, requests, insights, quarterSprints] = await Promise.all([
+  const [campaigns, requests, insights] = await Promise.all([
     prisma.campaign.findMany({
       where: { fiscalYearId: fiscalYear.id },
-      include: {
+      select: {
+        name: true,
+        goal: true,
+        startDate: true,
+        endDate: true,
+        quarter: true,
         allocations: {
           where: { fiscalYearId: fiscalYear.id },
           select: {
@@ -249,20 +190,16 @@ export async function getDashboardData(): Promise<DashboardData> {
             email: true,
           },
         },
-        quarterSprint: {
-          include: {
-            objective: {
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                status: true,
-                progress: true,
-              },
-            },
+        objective: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
+            progress: true,
           },
         },
-      } as any,
+      },
       orderBy: { createdAt: "asc" },
     }) as unknown as Promise<CampaignWithRelations[]>,
     prisma.budgetRequest.findMany({
@@ -280,7 +217,6 @@ export async function getDashboardData(): Promise<DashboardData> {
       where: { fiscalYearId: fiscalYear.id },
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
     }),
-    quarterSprintsPromise,
   ]);
 
   const summaryMetrics: SummaryMetric[] = snapshots.map((snapshot: typeof snapshots[number]) => ({
@@ -292,24 +228,22 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const campaignAllocations: CampaignAllocation[] = campaigns.map((campaign: CampaignWithRelations) => {
     const allocation = campaign.allocations[0];
-    const quarterRecord = campaign.quarterSprint;
-    const quarterSprint = quarterRecord
-      ? {
-          name: quarterRecord.name,
-          code: quarterRecord.code,
-          shortCode: quarterRecord.shortCode ?? null,
-          quarter: quarterRecord.quarter,
-          objective: quarterRecord.objective
-            ? {
-                title: quarterRecord.objective.title,
-                description: quarterRecord.objective.description,
-                status: quarterRecord.objective.status,
-              }
-            : null,
-          startDate: quarterRecord.startDate ? quarterRecord.startDate.toISOString() : null,
-          endDate: quarterRecord.endDate ? quarterRecord.endDate.toISOString() : null,
-        }
-      : null;
+    const objective = campaign.objective;
+    const campaignInfo = {
+      name: campaign.name,
+      code: null, // Campaigns don't have codes anymore
+      shortCode: null,
+      quarter: campaign.quarter,
+      objective: objective
+        ? {
+            title: objective.title,
+            description: objective.description,
+            status: objective.status,
+          }
+        : null,
+      startDate: campaign.startDate ? campaign.startDate.toISOString() : null,
+      endDate: campaign.endDate ? campaign.endDate.toISOString() : null,
+    };
 
     return {
       name: campaign.name,
@@ -318,7 +252,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       goal: campaign.goal ?? null,
       allocated: allocation?.allocated ?? 0,
       spent: allocation?.spent ?? 0,
-      quarterSprint,
+      quarterSprint: campaignInfo, // Keep name for backward compatibility in UI
     };
   });
 
@@ -337,31 +271,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     priority: insight.priority,
   }));
 
-  const quarterTimeline: QuarterSprintSummary[] = quarterSprints.map((quarter: any) => {
-    return {
-      id: quarter.id,
-      name: quarter.name,
-      code: quarter.code,
-      shortCode: quarter.shortCode ?? null,
-      quarter: quarter.quarter,
-      objective: quarter.objective
-        ? {
-            id: quarter.objective.id,
-            title: quarter.objective.title,
-            description: quarter.objective.description,
-            status: quarter.objective.status,
-          }
-        : null,
-      startDate: quarter.startDate ? quarter.startDate.toISOString() : null,
-      endDate: quarter.endDate ? quarter.endDate.toISOString() : null,
-    };
-  });
-
   return {
     summaryMetrics,
     campaignAllocations,
     upcomingApprovals,
     insights: mappedInsights,
-    quarterTimeline,
   };
 }

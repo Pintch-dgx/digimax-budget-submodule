@@ -110,9 +110,9 @@ function getLinkStatusBadge(linkStatus: BudgetRequestLinkStatus) {
     BudgetRequestLinkStatus,
     { label: string; variant: Parameters<typeof Badge>[0]["variant"] }
   > = {
-    [BudgetRequestLinkStatus.UNDEFINED_OBJECTIVE]: { label: "No OKR", variant: "secondary" },
-    [BudgetRequestLinkStatus.ASSIGNMENT_PENDING]: { label: "Da asseg.", variant: "warning" },
-    [BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN]: { label: "Collega", variant: "success" },
+    [BudgetRequestLinkStatus.UNDEFINED_OBJECTIVE]: { label: "No OKR", variant: "info" as const },
+    [BudgetRequestLinkStatus.ASSIGNMENT_PENDING]: { label: "Da assegnare", variant: "warning" },
+    [BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN]: { label: "Collegata", variant: "success" },
   };
 
   return map[linkStatus] ?? { label: linkStatus, variant: "default" };
@@ -144,12 +144,17 @@ export function BudgetRequestsList() {
 
   useEffect(() => {
     const handler = setTimeout(() => {
+      const trimmed = searchInput.trim();
       setPage(1);
-      setSearchTerm(searchInput.trim());
+      setSearchTerm(trimmed);
+      // Clear error when search is cleared to allow automatic retry
+      if (!trimmed && error) {
+        setError(null);
+      }
     }, 400);
 
     return () => clearTimeout(handler);
-  }, [searchInput]);
+  }, [searchInput, error]);
 
   const fetchFiltersOptions = useCallback(async () => {
     try {
@@ -198,8 +203,9 @@ export function BudgetRequestsList() {
       if (requesterId !== "all") {
         params.set("requesterId", requesterId);
       }
-      if (searchTerm) {
-        params.set("search", searchTerm);
+      // Only add search param if searchTerm is not empty (trimmed)
+      if (searchTerm && searchTerm.trim()) {
+        params.set("search", searchTerm.trim());
       }
       if (startDate) {
         params.set("startDate", startDate);
@@ -223,20 +229,39 @@ export function BudgetRequestsList() {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
         const errorMsg =
           errorData.error || errorData.details || `HTTP ${response.status}: Failed to fetch budget requests`;
-        throw new Error(errorMsg);
+        
+        // Only treat as error if status is 500 or higher
+        // 400-499 are client errors but might be recoverable
+        if (response.status >= 500) {
+          throw new Error(errorMsg);
+        } else {
+          // For client errors, return empty results instead of throwing
+          console.warn("Client error from API:", errorMsg);
+          setRequests([]);
+          setMeta({ total: 0, page: 1, pageSize: 10, totalPages: 1, canDelete: false });
+          return;
+        }
       }
 
       const { data, meta: metaData }: { data: BudgetRequest[]; meta: Meta } = await response.json();
-      setRequests(data);
-      setMeta(metaData);
+      setRequests(data || []);
+      setMeta(metaData || { total: 0, page: 1, pageSize: 10, totalPages: 1, canDelete: false });
 
       if (metaData.totalPages > 0 && metaData.page > metaData.totalPages) {
         setPage(metaData.totalPages);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Si è verificato un errore";
-      setError(errorMessage);
-      toast({ variant: "error", title: "Errore caricamento", description: errorMessage });
+      // Only set error for actual network/server errors (500+)
+      // Don't show error for empty results or client errors
+      if (errorMessage.includes("HTTP 5") || errorMessage.includes("Failed to fetch") || errorMessage.includes("Network")) {
+        setError(errorMessage);
+        toast({ variant: "error", title: "Errore caricamento", description: errorMessage });
+      } else {
+        // For other errors, just show empty state
+        setRequests([]);
+        setMeta({ total: 0, page: 1, pageSize: 10, totalPages: 1, canDelete: false });
+      }
     } finally {
       setLoading(false);
     }
@@ -286,6 +311,7 @@ export function BudgetRequestsList() {
   const filtersDisabled = loading || filtersLoading;
 
   const emptyState = !loading && !error && requests.length === 0;
+  const hasActiveFilters = searchTerm || fiscalYearId !== "all" || requesterId !== "all" || startDate || endDate;
 
   const resultSummary = useMemo(() => {
     if (!meta.total) {
@@ -348,13 +374,50 @@ export function BudgetRequestsList() {
             : emptyState
               ? (
                   <TableRow>
-                    <TableCell colSpan={showActions ? 8 : 7} className="py-12 text-center text-[var(--color-neutral-500)]">
-                      Nessuna richiesta trovata con i filtri selezionati.
+                    <TableCell colSpan={showActions ? 8 : 7} className="py-12 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <p className="text-sm font-medium text-[var(--color-neutral-500)]">
+                          {hasActiveFilters ? "Nessun risultato trovato" : "Nessuna richiesta presente"}
+                        </p>
+                        {hasActiveFilters && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSearchInput("");
+                              setSearchTerm("");
+                              setFiscalYearId("all");
+                              setRequesterId("all");
+                              setStartDate("");
+                              setEndDate("");
+                              setPage(1);
+                            }}
+                          >
+                            Rimuovi filtri
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
-              : (
-                  requests.map((request) => {
+              : error
+                ? (
+                    <TableRow>
+                      <TableCell colSpan={showActions ? 8 : 7} className="py-12 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <p className="text-sm font-medium text-[var(--color-neutral-500)]">
+                            Errore nel caricamento delle richieste
+                          </p>
+                          <p className="text-xs text-[var(--color-neutral-500)]">{error}</p>
+                          <Button variant="outline" size="sm" onClick={() => fetchRequests()}>
+                            Riprova
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                : (
+                    requests.map((request) => {
                     const statusBadge = getStatusBadge(request.status);
                     const linkBadge = getLinkStatusBadge(request.linkStatus);
                     return (
@@ -461,8 +524,45 @@ export function BudgetRequestsList() {
 
     if (emptyState) {
       return (
-        <div className="rounded-[var(--radius-lg)] border border-[var(--color-neutral-200)] bg-[var(--surface)]/85 p-8 text-center text-[var(--color-neutral-500)] shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
-          Nessuna richiesta trovata con i filtri selezionati.
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-neutral-200)] bg-[var(--surface)]/85 p-8 text-center shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm font-medium text-[var(--color-neutral-500)]">
+              {hasActiveFilters ? "Nessun risultato trovato" : "Nessuna richiesta presente"}
+            </p>
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchTerm("");
+                  setFiscalYearId("all");
+                  setRequesterId("all");
+                  setStartDate("");
+                  setEndDate("");
+                  setPage(1);
+                }}
+              >
+                Rimuovi filtri
+              </Button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-neutral-200)] bg-[var(--surface)]/85 p-8 text-center shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm font-medium text-[var(--color-neutral-500)]">
+              Errore nel caricamento delle richieste
+            </p>
+            <p className="text-xs text-[var(--color-neutral-500)]">{error}</p>
+            <Button variant="outline" size="sm" onClick={() => fetchRequests()}>
+              Riprova
+            </Button>
+          </div>
         </div>
       );
     }

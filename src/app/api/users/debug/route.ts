@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
         email: true,
         fullName: true,
         password: false, // Non includere password per sicurezza
-        hasPassword: true, // Questo non esiste, ma mostra se password è null
+        // hasPassword non esiste in Prisma, lo gestiamo dopo con logica
       },
       orderBy: { id: "asc" },
     });

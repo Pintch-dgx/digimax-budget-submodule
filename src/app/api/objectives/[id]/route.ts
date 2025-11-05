@@ -115,7 +115,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       where: { id: objectiveId },
       select: { 
         id: true,
-        quarterSprints: {
+        campaigns: {
           select: { 
             id: true,
             keyResults: {
@@ -132,10 +132,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     // Count dependent items that will be deleted due to cascade
-    const quarterSprintsCount = existing.quarterSprints?.length || 0;
-    const keyResultsCount = existing.quarterSprints?.reduce((sum, qs) => sum + (qs.keyResults?.length || 0), 0) || 0;
+    const campaignsCount = existing.campaigns?.length || 0;
+    const keyResultsCount = existing.campaigns?.reduce((sum, c) => sum + (c.keyResults?.length || 0), 0) || 0;
 
-    // Delete the objective (cascade will delete quarter sprints and their key results)
+    // Delete the objective (cascade will delete campaigns and their key results)
     await (prisma as PrismaClient).objective.delete({
       where: { id: objectiveId },
     });
@@ -143,7 +143,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return NextResponse.json({ 
       success: true, 
       message: "Obiettivo eliminato con successo",
-      deletedQuarterSprintsCount: quarterSprintsCount,
+      deletedCampaignsCount: campaignsCount,
       deletedKeyResultsCount: keyResultsCount
     });
   } catch (error) {

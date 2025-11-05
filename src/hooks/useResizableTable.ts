@@ -40,7 +40,7 @@ function saveColumnWidths(widths: number[], userId?: string, tableId?: string): 
 }
 
 export function useResizableTable(
-  tableRef: RefObject<HTMLTableElement>,
+  tableRef: RefObject<HTMLTableElement | null>,
   enabled = true,
   options?: ResizableTableOptions
 ) {
@@ -96,7 +96,11 @@ export function useResizableTable(
       startX: number;
       startWidth: number;
     } | null = null;
-    const stateRef = { current: state } as { current: typeof state };
+    const stateRef = { current: state } as { current: {
+      index: number;
+      startX: number;
+      startWidth: number;
+    } | null };
 
     const handlePointerMove = (event: PointerEvent) => {
       const current = stateRef.current;

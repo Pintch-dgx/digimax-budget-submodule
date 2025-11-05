@@ -13,14 +13,14 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const quarterSprintId = searchParams.get("quarterSprintId");
+    const objectiveId = searchParams.get("objectiveId");
     const ownerId = searchParams.get("ownerId");
 
     const where: Record<string, unknown> = {};
-    if (quarterSprintId) {
-      const parsed = Number(quarterSprintId);
+    if (objectiveId) {
+      const parsed = Number(objectiveId);
       if (!Number.isNaN(parsed)) {
-        where.quarterSprintId = parsed;
+        where.objectiveId = parsed;
       }
     }
     if (ownerId) {
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     const keyResults = await (prisma as any).keyResult.findMany({
       where,
-      orderBy: [{ quarterSprintId: "asc" }, { title: "asc" }],
+      orderBy: [{ objectiveId: "asc" }, { title: "asc" }],
       select: {
         id: true,
         title: true,
@@ -42,19 +42,13 @@ export async function GET(request: NextRequest) {
         unit: true,
         weight: true,
         status: true,
-        quarterSprintId: true,
+        objectiveId: true,
         ownerId: true,
-        quarterSprint: {
+        objective: {
           select: {
             id: true,
-            name: true,
-            shortCode: true,
-            objective: {
-              select: {
-                id: true,
-                title: true,
-              },
-            },
+            title: true,
+            description: true,
           },
         },
         owner: {
@@ -90,22 +84,13 @@ export async function POST(request: NextRequest) {
       progressValue,
       unit,
       weight,
-      quarterSprintId,
+      objectiveId, // Obbligatorio per struttura OKR
       ownerId,
       status,
     } = body ?? {};
 
-    if (!title || !metric) {
-      return NextResponse.json({ error: "Titolo e metrica sono obbligatori" }, { status: 400 });
-    }
-
-    if (!quarterSprintId) {
-      return NextResponse.json({ error: "Quarter sprint è obbligatorio" }, { status: 400 });
-    }
-
-    const parsedQuarterSprintId = Number(quarterSprintId);
-    if (!Number.isFinite(parsedQuarterSprintId)) {
-      return NextResponse.json({ error: "Quarter sprint non valido" }, { status: 400 });
+    if (!title || !metric || !objectiveId) {
+      return NextResponse.json({ error: "Titolo, metrica e obiettivo strategico sono obbligatori" }, { status: 400 });
     }
 
     const parsedTargetValue = targetValue !== undefined && targetValue !== null ? Number(targetValue) : null;
@@ -124,24 +109,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Weight deve essere un numero positivo" }, { status: 400 });
     }
 
+    // objectiveId è obbligatorio per struttura OKR
+    const parsedObjectiveId = Number(objectiveId);
+    if (!Number.isFinite(parsedObjectiveId)) {
+      return NextResponse.json({ error: "Objective ID non valido" }, { status: 400 });
+    }
+
+    // Verifica che l'obiettivo esista
+    const objectiveExists = await (prisma as any).objective.findUnique({
+      where: { id: parsedObjectiveId },
+      select: { id: true },
+    });
+
+    if (!objectiveExists) {
+      return NextResponse.json({ error: "Obiettivo strategico non trovato" }, { status: 404 });
+    }
+
+    // Verifica owner se fornito
+    const createData: any = {
+      title: String(title),
+      metric: String(metric),
+      targetValue: parsedTargetValue,
+      progressValue: parsedProgressValue,
+      unit: unit ?? "unit",
+      weight: parsedWeight,
+      status: status ?? "NOT_STARTED",
+      objective: { connect: { id: parsedObjectiveId } }, // Sempre obbligatorio
+    };
+
+    if (ownerId) {
+      const parsedOwnerId = Number(ownerId);
+      if (Number.isFinite(parsedOwnerId)) {
+        // Verifica che l'utente esista prima di collegarlo
+        const ownerExists = await (prisma as any).marketingUser.findUnique({
+          where: { id: parsedOwnerId },
+          select: { id: true },
+        });
+        
+        if (ownerExists) {
+          createData.owner = { connect: { id: parsedOwnerId } };
+        } else {
+          console.warn(`Owner ID ${parsedOwnerId} not found for key result, creating without owner`);
+        }
+      }
+    }
+
     const created = await (prisma as any).keyResult.create({
-      data: {
-        title: String(title),
-        metric: String(metric),
-        targetValue: parsedTargetValue,
-        progressValue: parsedProgressValue,
-        unit: unit ?? "unit",
-        weight: parsedWeight,
-        status: status ?? "NOT_STARTED",
-        quarterSprint: {
-          connect: { id: parsedQuarterSprintId },
-        },
-        ...(ownerId ? {
-          owner: {
-            connect: { id: Number(ownerId) },
-          },
-        } : {}),
-      },
+      data: createData,
       select: {
         id: true,
         title: true,
@@ -151,7 +165,7 @@ export async function POST(request: NextRequest) {
         unit: true,
         weight: true,
         status: true,
-        quarterSprintId: true,
+        objectiveId: true,
         ownerId: true,
       },
     });

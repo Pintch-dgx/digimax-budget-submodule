@@ -93,15 +93,9 @@ export async function PUT(
     const {
       status,
       notes,
-      campaignId,
-      keyResultId,
-      quarterSprintId,
     } = body as {
       status?: BudgetRequestStatus;
       notes?: string | null;
-      campaignId?: number | string | null;
-      keyResultId?: number | string | null;
-      quarterSprintId?: number | string | null;
     };
 
     // Validazione stato
@@ -114,9 +108,6 @@ export async function PUT(
       where: { id: requestId },
       select: {
         id: true,
-        fiscalYearId: true,
-        quarterSprintId: true,
-        keyResultId: true,
         campaignId: true,
       },
     });
@@ -125,119 +116,6 @@ export async function PUT(
       return NextResponse.json({ error: "Budget request not found" }, { status: 404 });
     }
 
-    let resolvedQuarterSprintId: number | null = existingRequest.quarterSprintId;
-    let resolvedKeyResultId: number | null = existingRequest.keyResultId;
-    let resolvedCampaignId: number | null = existingRequest.campaignId;
-
-    if (quarterSprintId !== undefined) {
-      if (quarterSprintId === null || quarterSprintId === "") {
-        resolvedQuarterSprintId = null;
-      } else {
-        const parsedQuarterSprintId = Number(quarterSprintId);
-        if (!Number.isFinite(parsedQuarterSprintId)) {
-          return NextResponse.json({ error: "Quarter sprint non valido" }, { status: 400 });
-        }
-        const quarterSprint = await prisma.quarterSprint.findUnique({
-          where: { id: parsedQuarterSprintId },
-          select: { id: true, fiscalYearId: true },
-        });
-        if (!quarterSprint) {
-          return NextResponse.json({ error: "Quarter sprint non trovato" }, { status: 404 });
-        }
-        if (quarterSprint.fiscalYearId !== existingRequest.fiscalYearId) {
-          return NextResponse.json(
-            { error: "Il Quarter Sprint appartiene a un anno fiscale diverso" },
-            { status: 400 }
-          );
-        }
-        resolvedQuarterSprintId = quarterSprint.id;
-      }
-    }
-
-    if (keyResultId !== undefined) {
-      if (keyResultId === null || keyResultId === "") {
-        resolvedKeyResultId = null;
-      } else {
-        const parsedKeyResultId = Number(keyResultId);
-        if (!Number.isFinite(parsedKeyResultId)) {
-          return NextResponse.json({ error: "Key Result non valido" }, { status: 400 });
-        }
-        const keyResult = await prisma.keyResult.findUnique({
-          where: { id: parsedKeyResultId },
-          select: { id: true, quarterSprintId: true },
-        });
-        if (!keyResult) {
-          return NextResponse.json({ error: "Key Result non trovato" }, { status: 404 });
-        }
-        resolvedKeyResultId = keyResult.id;
-        if (keyResult.quarterSprintId) {
-          if (resolvedQuarterSprintId && resolvedQuarterSprintId !== keyResult.quarterSprintId) {
-            return NextResponse.json(
-              { error: "Il Key Result selezionato appartiene a un Quarter Sprint diverso" },
-              { status: 400 }
-            );
-          }
-          resolvedQuarterSprintId = keyResult.quarterSprintId;
-        } else if (!resolvedQuarterSprintId) {
-          resolvedQuarterSprintId = null;
-        }
-      }
-    }
-
-    if (campaignId !== undefined) {
-      if (campaignId === null || campaignId === "") {
-        resolvedCampaignId = null;
-      } else {
-        const parsedCampaignId = Number(campaignId);
-        if (!Number.isFinite(parsedCampaignId)) {
-          return NextResponse.json({ error: "Campagna non valida" }, { status: 400 });
-        }
-        const campaign = await prisma.campaign.findUnique({
-          where: { id: parsedCampaignId },
-          select: {
-            id: true,
-            fiscalYearId: true,
-            quarterSprintId: true,
-            keyResultId: true,
-          },
-        });
-        if (!campaign) {
-          return NextResponse.json({ error: "Campagna non trovata" }, { status: 404 });
-        }
-        if (campaign.fiscalYearId !== existingRequest.fiscalYearId) {
-          return NextResponse.json(
-            { error: "La campagna appartiene a un anno fiscale diverso" },
-            { status: 400 }
-          );
-        }
-        if (campaign.quarterSprintId) {
-          if (resolvedQuarterSprintId && resolvedQuarterSprintId !== campaign.quarterSprintId) {
-            return NextResponse.json(
-              { error: "La campagna è collegata a un Quarter Sprint diverso" },
-              { status: 400 }
-            );
-          }
-          resolvedQuarterSprintId = campaign.quarterSprintId;
-        }
-        if (campaign.keyResultId) {
-          if (resolvedKeyResultId && resolvedKeyResultId !== campaign.keyResultId) {
-            return NextResponse.json(
-              { error: "La campagna è collegata a un Key Result diverso" },
-              { status: 400 }
-            );
-          }
-          resolvedKeyResultId = campaign.keyResultId;
-        }
-        resolvedCampaignId = campaign.id;
-      }
-    }
-
-    const linkStatus = resolvedCampaignId
-      ? BudgetRequestLinkStatus.ASSIGNED_TO_CAMPAIGN
-      : resolvedKeyResultId
-        ? BudgetRequestLinkStatus.ASSIGNMENT_PENDING
-        : BudgetRequestLinkStatus.UNDEFINED_OBJECTIVE;
-
     const updateData: Prisma.BudgetRequestUpdateInput = {};
     if (status) {
       updateData.status = status as BudgetRequestStatus;
@@ -245,49 +123,103 @@ export async function PUT(
     if (notes !== undefined) {
       updateData.notes = notes;
     }
-    if (resolvedQuarterSprintId !== existingRequest.quarterSprintId) {
-      updateData.quarterSprint = resolvedQuarterSprintId
-        ? { connect: { id: resolvedQuarterSprintId } }
-        : { disconnect: true };
-    }
-    if (resolvedKeyResultId !== existingRequest.keyResultId) {
-      updateData.keyResult = resolvedKeyResultId
-        ? { connect: { id: resolvedKeyResultId } }
-        : { disconnect: true };
-    }
-    if (resolvedCampaignId !== existingRequest.campaignId) {
-      updateData.campaign = resolvedCampaignId
-        ? { connect: { id: resolvedCampaignId } }
-        : { disconnect: true };
-    }
-    updateData.linkStatus = linkStatus;
 
-    const budgetRequest = await prisma.budgetRequest.update({
-      where: { id: requestId },
-      data: updateData,
-      include: {
-        requester: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
+    // Se lo status viene cambiato a APPROVED, aggiorna anche l'allocatedBudget della campagna
+    const isApproving = status === BudgetRequestStatus.APPROVED && 
+                        existingRequest.campaignId;
+
+    let budgetRequest;
+    
+    if (isApproving) {
+      // Usa una transazione per aggiornare sia la richiesta che la campagna
+      budgetRequest = await prisma.$transaction(async (tx) => {
+        // 1. Recupera la richiesta corrente per l'importo
+        const currentRequest = await tx.budgetRequest.findUnique({
+          where: { id: requestId },
+          select: { amount: true, campaignId: true },
+        });
+
+        if (!currentRequest) {
+          throw new Error("Budget request not found");
+        }
+
+        // 2. Aggiorna la richiesta
+        const updated = await tx.budgetRequest.update({
+          where: { id: requestId },
+          data: updateData,
+          include: {
+            requester: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+            fiscalYear: {
+              select: {
+                id: true,
+                code: true,
+                label: true,
+              },
+            },
+            campaign: {
+              select: {
+                id: true,
+                name: true,
+                allocatedBudget: true,
+              },
+            },
+          },
+        });
+
+        // 3. Aggiorna l'allocatedBudget della campagna
+        if (updated.campaign && currentRequest.campaignId) {
+          const currentAllocated = updated.campaign.allocatedBudget || 0;
+          const newAllocated = currentAllocated + currentRequest.amount;
+
+          await tx.campaign.update({
+            where: { id: currentRequest.campaignId },
+            data: {
+              allocatedBudget: newAllocated,
+              // Quando viene approvato il primo budget, la campagna passa ad ACTIVE
+              status: currentAllocated === 0 ? "ACTIVE" : undefined,
+            },
+          });
+
+          console.log(`💰 Budget approved - Updated campaign ${currentRequest.campaignId} - allocatedBudget: ${currentAllocated} → ${newAllocated}`);
+        }
+
+        return updated;
+      });
+    } else {
+      // Aggiornamento normale senza transazione
+      budgetRequest = await prisma.budgetRequest.update({
+        where: { id: requestId },
+        data: updateData,
+        include: {
+          requester: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+          fiscalYear: {
+            select: {
+              id: true,
+              code: true,
+              label: true,
+            },
+          },
+          campaign: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        fiscalYear: {
-          select: {
-            id: true,
-            code: true,
-            label: true,
-          },
-        },
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+      });
+    }
 
     return NextResponse.json(budgetRequest);
   } catch (error) {

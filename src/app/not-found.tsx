@@ -38,7 +38,7 @@ function SnakeGame() {
 
   const generateBug = useRef((gridWidth: number, gridHeight: number, currentSnake: Array<{ x: number; y: number }>) => {
     let attempts = 0;
-    let newBug;
+    let newBug: { x: number; y: number };
     do {
       newBug = {
         x: Math.floor(Math.random() * gridWidth),
@@ -641,7 +641,7 @@ export default function NotFound() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <Link href="/">
             <Button
-              variant="default"
+              variant="primary"
               className="bg-white text-[#0066CC] hover:bg-white/90 font-semibold px-8 py-6 text-lg shadow-lg hover:shadow-xl transition-all hover:scale-105"
             >
               🏠 Torna alla Home

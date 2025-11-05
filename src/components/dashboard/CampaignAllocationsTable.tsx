@@ -14,8 +14,12 @@ type CampaignAllocation = {
   quarterSprint: {
     name: string;
     code: string | null;
-    shortCode?: string | null;
-    objective: string;
+    shortCode: string | null;
+    objective: {
+      title: string;
+      description: string | null;
+      status: string;
+    } | null;
     startDate: string | null;
     endDate: string | null;
   } | null;
@@ -145,15 +149,15 @@ export function CampaignAllocationsTable({ data }: CampaignAllocationsTableProps
                 </div>
               </TableCell>
 
-              <TableCell className="align-top text-right tabular-nums font-medium text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]">
+              <TableCell className="align-top text-right tabular-nums font-medium text-[var(--color-primary)] dark:text-[var(--color-tertiary-ice)]" suppressHydrationWarning>
                 {formatCurrency(allocation.allocated)}
               </TableCell>
 
-              <TableCell className="align-top text-right tabular-nums text-[#1f7b5c]">
+              <TableCell className="align-top text-right tabular-nums text-[#1f7b5c]" suppressHydrationWarning>
                 {formatCurrency(allocation.spent)}
               </TableCell>
 
-              <TableCell className={cn("align-top text-right tabular-nums", deltaColor)}>
+              <TableCell className={cn("align-top text-right tabular-nums", deltaColor)} suppressHydrationWarning>
                 {formatCurrency(delta)}
               </TableCell>
 

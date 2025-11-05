@@ -131,7 +131,7 @@ export default function DebugAuthPage() {
       {result && (
         <Card>
           <CardHeader>
-            <CardTitle>Risultato: {result.method}</CardTitle>
+            <CardTitle>Risultato: {String(result.method)}</CardTitle>
           </CardHeader>
           <CardContent>
             <pre className="rounded-[var(--radius-md)] bg-[var(--color-tertiary-ice)] p-4 text-xs text-[var(--color-primary)] overflow-auto">
