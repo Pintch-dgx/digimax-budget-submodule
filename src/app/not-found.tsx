@@ -525,6 +525,13 @@ export default function NotFound() {
   const [joke, setJoke] = useState(NERD_JOKES[0]);
   const [codeSnippet, setCodeSnippet] = useState(CODE_SNIPPETS[0]);
   const [glitchActive, setGlitchActive] = useState(false);
+  const [pathname, setPathname] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setPathname(window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     // Cambia messaggio ogni 3 secondi
@@ -632,7 +639,7 @@ export default function NotFound() {
             <span className="text-green-400">$</span>
             <span className="animate-blink">_</span>
           </div>
-          <div className="text-red-400">console.error("Page not found: {window.location.pathname}");</div>
+          <div className="text-red-400">console.error("Page not found: {pathname}");</div>
           <div className="text-yellow-400 mt-1">// Maybe try checking your routes? 🤔</div>
           <div className="text-green-400 mt-1">// Or just go back to safety ⬇️</div>
         </div>
