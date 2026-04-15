@@ -98,7 +98,7 @@ Devi cambiare a un database "vero" come PostgreSQL.
 - [ ] `AUTH_SECRET` è diverso da quello di sviluppo
 - [ ] `DATABASE_URL` punta al database produzione (non sviluppo!)
 - [ ] Nessun file `.env` viene caricato su GitHub
-- [ ] Password admin di produzione è cambiata (non `admin123`)
+- [ ] Password admin di produzione è cambiata (non `demo123`)
 
 #### Funzionalità
 - [ ] Login funziona

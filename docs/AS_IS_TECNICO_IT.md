@@ -1303,7 +1303,7 @@ if (process.env.NODE_ENV === "production") {
 ### 14.3 Sicurezza
 
 - [ ] Endpoint di debug rimossi o disabilitati
-- [ ] Password admin di produzione cambiata (non `admin123`)
+- [ ] Password admin di produzione cambiata (non `demo123`)
 - [ ] Headers di sicurezza configurati (se possibile)
 - [ ] HTTPS configurato e funzionante
 - [ ] Cookie secure flag abilitato (NextAuth lo fa automaticamente)
@@ -1361,18 +1361,15 @@ if (process.env.NODE_ENV === "production") {
 
 **⚠️ IMPORTANTE**: Questi sono solo per sviluppo. Cambiare in produzione!
 
-**Utente Admin Default** (seed):
-- Email: `admin@example.com`
-- Password: `admin123`
+**Utente Admin Default** (seed `prisma/seed-demo-js.js`):
+- Email: `admin@digimax.local`
+- Password: `demo123`
 - Ruolo: `admin`
 
-**Utenti Demo** (seed):
-- Email: `elena.ferri@digimax.mock`
-- Password: `demo123`
-- Email: `marco.neri@digimax.mock`
-- Password: `demo123`
-- Email: `chiara.bianchi@digimax.mock`
-- Password: `demo123`
+**Utenti Demo** (seed, tutti con password `demo123`):
+- Email: `elena.ferri@digimax.mock` (approver)
+- Email: `marco.neri@digimax.mock` (requester)
+- Email: `chiara.riva@digimax.mock` (requester)
 
 ### 15.3 Troubleshooting Comune
 

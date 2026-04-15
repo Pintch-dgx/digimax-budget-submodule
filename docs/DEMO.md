@@ -31,19 +31,22 @@ npm run dev
 
 ## Credenziali di Accesso
 
+> Tutte le utenze demo (inclusa l'admin) hanno la stessa password: `demo123`.
+> Source of truth: `prisma/seed-demo-js.js` (seed attivo).
+
 ### Utente Admin
-- **Email**: `admin@example.com`
-- **Password**: `admin123`
-
-### Utente Requester (Standard)
-- **Email**: `requester@digimax.mock`
+- **Email**: `admin@digimax.local`
 - **Password**: `demo123`
-- **Ruolo**: Utente Standard (può creare richieste budget, non può approvare)
 
-### Utenti Demo (tutti con password: `demo123`)
-- **Elena Ferri** (Digital Specialist): `elena.ferri@digimax.mock`
-- **Marco Neri** (Engagement Specialist): `marco.neri@digimax.mock`
-- **Chiara Bianchi** (Marketing Manager): `chiara.bianchi@digimax.mock`
+### Utente Approver
+- **Email**: `elena.ferri@digimax.mock`
+- **Password**: `demo123`
+- **Ruolo**: Approver (visibilita' verticale, puo' approvare richieste)
+
+### Utenti Requester (Standard)
+- **Email**: `marco.neri@digimax.mock` oppure `chiara.riva@digimax.mock`
+- **Password**: `demo123`
+- **Ruolo**: Requester (puo' creare richieste budget, non puo' approvare)
 
 ## Dati Demo Inclusi
 
@@ -78,7 +81,7 @@ npm run dev
 
 ## Flusso Demo Consigliato
 
-1. **Login** con admin@example.com
+1. **Login** con `admin@digimax.local` / `demo123`
 2. **Dashboard principale**: esplora KPI, campagne e approvazioni
 3. **Navigazione**: prova le diverse sezioni dal menu laterale
 4. **Test responsive**: ridimensiona il browser per vedere il menu mobile
@@ -143,7 +146,7 @@ npm run dev
 ### Caso 9: Test Requester User
 
 1. **Logout** dall'account corrente
-2. **Login** con `requester@digimax.mock` / `demo123`
+2. **Login** con `marco.neri@digimax.mock` / `demo123`
 3. Vai su **Nuova Richiesta Budget**
 4. Compila il form e invia
 

@@ -6,7 +6,7 @@ Questo documento descrive i test da eseguire per verificare l'integrazione di `c
 
 1. Database inizializzato con dati demo (`npm run db:seed:demo`)
 2. Server di sviluppo avviato (`npm run dev`)
-3. Sessione autenticata come admin (`admin@example.com` / `admin123`)
+3. Sessione autenticata come admin (`admin@digimax.local` / `demo123`)
 4. Token di sessione valido (ottenibile tramite browser DevTools → Application → Cookies)
 
 ## Setup Test

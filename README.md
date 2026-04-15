@@ -56,9 +56,10 @@ Apri il browser su [http://localhost:3000](http://localhost:3000).
 
 **📖 Per le credenziali complete e la guida demo**, consulta: [`docs/DEMO.md`](docs/DEMO.md)
 
-Credenziali di accesso rapido:
-- **Admin**: `admin@example.com` / `admin123`
-- **Requester**: `requester@digimax.mock` / `demo123`
+Credenziali di accesso rapido (tutti con password `demo123`):
+- **Admin**: `admin@digimax.local`
+- **Approver**: `elena.ferri@digimax.mock`
+- **Requester**: `marco.neri@digimax.mock` oppure `chiara.riva@digimax.mock`
 - **Altri utenti demo**: vedi `docs/DEMO.md`
 
 **⚠️ Nota**: Queste credenziali sono solo per sviluppo locale. Non utilizzarle mai in produzione.

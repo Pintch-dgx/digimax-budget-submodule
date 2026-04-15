@@ -156,7 +156,7 @@ Analisi approfondite su:
 ### Scenario di Test Consigliato
 
 #### **Step 1: Setup Iniziale (Admin)**
-1. Login come Admin (`admin@example.com` / `admin123`)
+1. Login come Admin (`admin@digimax.local` / `demo123`)
 2. Andare su **OKR Management**
 3. Creare un Obiettivo per l'anno fiscale corrente
 4. Creare un Quarter Sprint (es. Q1 2025)
