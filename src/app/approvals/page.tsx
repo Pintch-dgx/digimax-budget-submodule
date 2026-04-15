@@ -1,14 +1,12 @@
 import { redirect } from "next/navigation";
 import { DashboardWrapper } from "@/components/layout/DashboardWrapper";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
-import { ApprovalsList } from "@/components/approvals/ApprovalsList";
+import { ApprovalsView } from "@/components/approvals/ApprovalsView";
 import { getSession } from "@/lib/get-session";
 import { isAdmin } from "@/lib/role-guards";
 
 export default async function ApprovalsPage() {
   const session = await getSession();
-  
-  // Controlla se l'utente è admin, altrimenti reindirizza
+
   if (!(await isAdmin(session))) {
     redirect("/budget-requests");
   }
@@ -23,15 +21,7 @@ export default async function ApprovalsPage() {
           </p>
         </div>
 
-        <Card className="border border-[var(--color-neutral-200)] bg-[var(--surface)] shadow-[var(--shadow-md)] dark:border-[var(--color-neutral-100)] dark:bg-[var(--surface-muted)]">
-          <CardHeader>
-            <CardTitle>Approvazioni in Attesa</CardTitle>
-            <CardDescription>Richieste che necessitano della tua approvazione.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ApprovalsList />
-          </CardContent>
-        </Card>
+        <ApprovalsView />
       </div>
     </DashboardWrapper>
   );

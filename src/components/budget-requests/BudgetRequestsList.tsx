@@ -25,6 +25,7 @@ type BudgetRequest = {
   id: number;
   title: string;
   amount: number;
+  approvedAmount: number | null;
   dueDate: string;
   status: BudgetRequestStatus;
   linkStatus: BudgetRequestLinkStatus;
@@ -73,6 +74,7 @@ const STATUS_OPTIONS: Array<{ value: "all" | BudgetRequestStatus; label: string 
   { value: "all", label: "Tutti gli stati" },
   { value: BudgetRequestStatus.PENDING_APPROVAL, label: "In attesa" },
   { value: BudgetRequestStatus.APPROVED, label: "Approvate" },
+  { value: BudgetRequestStatus.APPROVED_WITH_CHANGES, label: "Approv. con modifica" },
   { value: BudgetRequestStatus.REJECTED, label: "Rifiutate" },
   { value: BudgetRequestStatus.DRAFT, label: "Bozze" },
 ];
@@ -99,6 +101,7 @@ function getStatusBadge(status: BudgetRequestStatus) {
   const map: Record<BudgetRequestStatus, { label: string; variant: Parameters<typeof Badge>[0]["variant"] }> = {
     [BudgetRequestStatus.PENDING_APPROVAL]: { label: "Attesa", variant: "warning" },
     [BudgetRequestStatus.APPROVED]: { label: "Approv.", variant: "success" },
+    [BudgetRequestStatus.APPROVED_WITH_CHANGES]: { label: "Approv. mod.", variant: "success" },
     [BudgetRequestStatus.REJECTED]: { label: "Rifiut.", variant: "danger" },
     [BudgetRequestStatus.DRAFT]: { label: "Bozza", variant: "info" },
   };
@@ -438,7 +441,18 @@ export function BudgetRequestsList() {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatCurrency(request.amount)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {request.approvedAmount !== null && request.approvedAmount !== request.amount ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-xs text-[var(--color-neutral-500)] line-through">
+                                {formatCurrency(request.amount)}
+                              </span>
+                              <span className="font-semibold">{formatCurrency(request.approvedAmount)}</span>
+                            </div>
+                          ) : (
+                            formatCurrency(request.amount)
+                          )}
+                        </TableCell>
                         <TableCell>{formatDate(request.dueDate)}</TableCell>
                         <TableCell>
                           <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
@@ -584,9 +598,20 @@ export function BudgetRequestsList() {
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[var(--color-neutral-500)]">Importo</span>
-                  <span className="font-medium tabular-nums text-[var(--color-primary)] dark:text-[var(--color-neutral-800)]">
-                    {formatCurrency(request.amount)}
-                  </span>
+                  {request.approvedAmount !== null && request.approvedAmount !== request.amount ? (
+                    <div className="flex flex-col items-end">
+                      <span className="text-xs text-[var(--color-neutral-500)] line-through">
+                        {formatCurrency(request.amount)}
+                      </span>
+                      <span className="font-semibold tabular-nums text-[var(--color-primary)] dark:text-[var(--color-neutral-800)]">
+                        {formatCurrency(request.approvedAmount)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-medium tabular-nums text-[var(--color-primary)] dark:text-[var(--color-neutral-800)]">
+                      {formatCurrency(request.amount)}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[var(--color-neutral-500)]">Scadenza</span>

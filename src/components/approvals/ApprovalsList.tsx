@@ -61,6 +61,7 @@ function getStatusBadge(status: BudgetRequestStatus) {
   const map: Record<BudgetRequestStatus, { label: string; variant: Parameters<typeof Badge>[0]["variant"] }> = {
     [BudgetRequestStatus.PENDING_APPROVAL]: { label: "Attesa", variant: "warning" },
     [BudgetRequestStatus.APPROVED]: { label: "Approv.", variant: "success" },
+    [BudgetRequestStatus.APPROVED_WITH_CHANGES]: { label: "Approv. mod.", variant: "success" },
     [BudgetRequestStatus.REJECTED]: { label: "Rifiut.", variant: "danger" },
     [BudgetRequestStatus.DRAFT]: { label: "Bozza", variant: "info" },
   };
@@ -80,7 +81,7 @@ function getLinkStatusBadge(linkStatus: BudgetRequestLinkStatus) {
   return map[linkStatus] ?? { label: linkStatus, variant: "default" };
 }
 
-export function ApprovalsList() {
+export function ApprovalsList({ onChange }: { onChange?: () => void } = {}) {
   const { toast } = useToast();
   const [requests, setRequests] = useState<BudgetRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,18 +117,25 @@ export function ApprovalsList() {
     fetchPendingRequests();
   }, [fetchPendingRequests]);
 
-  const handleApprove = async (requestId: number) => {
+  const handleApprove = async (requestId: number, overrideAmount?: number) => {
     setProcessingId(requestId);
     try {
+      const payload: Record<string, unknown> = {
+        status: overrideAmount !== undefined
+          ? BudgetRequestStatus.APPROVED_WITH_CHANGES
+          : BudgetRequestStatus.APPROVED,
+      };
+      if (overrideAmount !== undefined) {
+        payload.approvedAmount = overrideAmount;
+      }
+
       const response = await fetch(`/api/budget-requests/${requestId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({
-          status: BudgetRequestStatus.APPROVED,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -135,16 +143,34 @@ export function ApprovalsList() {
         throw new Error(data.error || "Failed to approve request");
       }
 
-      toast({ variant: "success", title: "Richiesta approvata" });
+      toast({
+        variant: "success",
+        title: overrideAmount !== undefined ? "Richiesta approvata con modifica" : "Richiesta approvata",
+      });
 
       // Ricarica la lista
       await fetchPendingRequests();
+      onChange?.();
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred";
       toast({ variant: "error", title: "Errore", description: message });
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const handleApproveWithChanges = (request: BudgetRequest) => {
+    const input = window.prompt(
+      `Importo richiesto: €${request.amount}\nInserisci importo approvato (diverso da richiesto):`,
+      String(request.amount)
+    );
+    if (input === null) return;
+    const parsed = Number(input);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      toast({ variant: "error", title: "Importo non valido" });
+      return;
+    }
+    handleApprove(request.id, parsed);
   };
 
   const handleReject = async (requestId: number) => {
@@ -174,6 +200,7 @@ export function ApprovalsList() {
 
       // Ricarica la lista
       await fetchPendingRequests();
+      onChange?.();
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred";
       toast({ variant: "error", title: "Errore", description: message });
@@ -295,6 +322,17 @@ export function ApprovalsList() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApproveWithChanges(request)}
+                      disabled={processingId === request.id}
+                      className="min-w-[38px] px-3"
+                      aria-label="Approva con modifica importo"
+                      title="Approva con modifica importo"
+                    >
+                      €
+                    </Button>
                     <Button
                       variant="primary"
                       size="sm"

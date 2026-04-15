@@ -204,6 +204,7 @@ model BudgetRequest {
   requesterId    Int
   campaignId     Int                     // Obbligatorio - richiesta sempre collegata a campagna
   amount         Float                   // Cambiato da Int per supportare decimali
+  approvedAmount Float?                  // Importo effettivamente approvato (se differisce dal richiesto)
   dueDate        DateTime
   status         BudgetRequestStatus     @default(PENDING_APPROVAL)
   linkStatus     BudgetRequestLinkStatus @default(UNDEFINED_OBJECTIVE)

@@ -93,9 +93,11 @@ export async function PUT(
     const {
       status,
       notes,
+      approvedAmount,
     } = body as {
       status?: BudgetRequestStatus;
       notes?: string | null;
+      approvedAmount?: number | null;
     };
 
     // Validazione stato
@@ -124,9 +126,20 @@ export async function PUT(
       updateData.notes = notes;
     }
 
-    // Se lo status viene cambiato a APPROVED, aggiorna anche l'allocatedBudget della campagna
-    const isApproving = status === BudgetRequestStatus.APPROVED && 
-                        existingRequest.campaignId;
+    // Se lo status viene cambiato a APPROVED o APPROVED_WITH_CHANGES, aggiorna l'allocatedBudget
+    const isApproving =
+      (status === BudgetRequestStatus.APPROVED || status === BudgetRequestStatus.APPROVED_WITH_CHANGES) &&
+      existingRequest.campaignId;
+
+    // Normalizza approvedAmount: numero positivo o null
+    let approvedAmountParsed: number | null = null;
+    if (approvedAmount !== undefined && approvedAmount !== null) {
+      const n = Number(approvedAmount);
+      if (Number.isNaN(n) || n <= 0) {
+        return NextResponse.json({ error: "approvedAmount deve essere un numero positivo" }, { status: 400 });
+      }
+      approvedAmountParsed = n;
+    }
 
     let budgetRequest;
     
@@ -136,11 +149,42 @@ export async function PUT(
         // 1. Recupera la richiesta corrente per l'importo
         const currentRequest = await tx.budgetRequest.findUnique({
           where: { id: requestId },
-          select: { amount: true, campaignId: true },
+          select: { amount: true, campaignId: true, fiscalYearId: true },
         });
 
         if (!currentRequest) {
           throw new Error("Budget request not found");
+        }
+
+        // Importo effettivamente da allocare (e da salvare in approvedAmount)
+        const effectiveAmount = approvedAmountParsed ?? currentRequest.amount;
+        // Se differisce, forziamo lo status a APPROVED_WITH_CHANGES
+        if (approvedAmountParsed !== null && approvedAmountParsed !== currentRequest.amount) {
+          updateData.status = BudgetRequestStatus.APPROVED_WITH_CHANGES;
+        }
+        updateData.approvedAmount = effectiveAmount;
+
+        // 1b. Verifica ceiling di fiscal year: sum(allocatedBudget) + effectiveAmount <= totalBudget
+        const fy = await tx.fiscalYear.findUnique({
+          where: { id: currentRequest.fiscalYearId },
+          select: { totalBudget: true, code: true },
+        });
+        if (!fy) {
+          throw new Error("Fiscal year not found");
+        }
+        const agg = await tx.campaign.aggregate({
+          where: { fiscalYearId: currentRequest.fiscalYearId },
+          _sum: { allocatedBudget: true },
+        });
+        const alreadyAllocated = agg._sum.allocatedBudget ?? 0;
+        const projected = alreadyAllocated + effectiveAmount;
+        if (projected > fy.totalBudget) {
+          const overBy = projected - fy.totalBudget;
+          const err = new Error(
+            `Budget ceiling superato per ${fy.code}: allocato ${alreadyAllocated} + approvato ${effectiveAmount} = ${projected} > totale ${fy.totalBudget} (sfora di ${overBy}).`
+          );
+          (err as Error & { code?: string }).code = "BUDGET_CEILING_EXCEEDED";
+          throw err;
         }
 
         // 2. Aggiorna la richiesta
@@ -172,10 +216,10 @@ export async function PUT(
           },
         });
 
-        // 3. Aggiorna l'allocatedBudget della campagna
+        // 3. Aggiorna l'allocatedBudget della campagna con effectiveAmount
         if (updated.campaign && currentRequest.campaignId) {
           const currentAllocated = updated.campaign.allocatedBudget || 0;
-          const newAllocated = currentAllocated + currentRequest.amount;
+          const newAllocated = currentAllocated + effectiveAmount;
 
           await tx.campaign.update({
             where: { id: currentRequest.campaignId },
@@ -186,7 +230,7 @@ export async function PUT(
             },
           });
 
-          console.log(`💰 Budget approved - Updated campaign ${currentRequest.campaignId} - allocatedBudget: ${currentAllocated} → ${newAllocated}`);
+          console.log(`💰 Budget approved - Updated campaign ${currentRequest.campaignId} - allocatedBudget: ${currentAllocated} → ${newAllocated} (effective: ${effectiveAmount}, original: ${currentRequest.amount})`);
         }
 
         return updated;
@@ -224,6 +268,9 @@ export async function PUT(
     return NextResponse.json(budgetRequest);
   } catch (error) {
     console.error("Error updating budget request:", error);
+    if (error instanceof Error && (error as Error & { code?: string }).code === "BUDGET_CEILING_EXCEEDED") {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       { error: "Failed to update budget request" },
       { status: 500 }
